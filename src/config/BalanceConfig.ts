@@ -66,12 +66,16 @@ export interface BalanceConfigShape {
   /** 중심 근처 미세 떨림 제거 데드존(|tilt| 이 값 미만이면 노이즈 억제/감쇠). */
   centerDeadzone: number;
 
-  /** 직진 중에도 tiltVel에 주입되는 상시 드리프트 바이어스 세기(0=끔). */
-  straightDriftGain: number;
-  /** 드리프트 바이어스의 random-walk 노이즈 스케일(방향이 서서히 바뀜). */
-  driftNoiseScale: number;
-  /** 드리프트 바이어스 절대값 상한. */
+  /** 주 쏠림 드리프트 세기(진동 아닌 "지속 방향 기울기"의 주력). */
+  leanDriftGain: number;
+  /** 쏠림 방향(driftBias) random-walk 전환 속도(느릴수록 한 방향을 오래 유지). */
+  leanDirChangeRate: number;
+  /** 쏠림 방향 절대값 상한. */
   driftMax: number;
+  /** 속도 비례 쏠림 증가 계수: ×(1 + speedLeanScale×정규화속도). */
+  speedLeanScale: number;
+  /** 결승선 근접 비례 쏠림 증가 계수: ×(1 + finishLeanScale×근접도). */
+  finishLeanScale: number;
 
   /** 안전장치: tilt/tiltVel 절대값 상한(시각 폭주 방지). */
   maxTilt: number;
@@ -100,24 +104,26 @@ export const BalanceConfig: BalanceConfigShape = {
 
   stopDamping: 9.0,
   moveInstabilityScale: 1.6,
-  walkSwayGain: 4.5,
+  walkSwayGain: 1.2, // 오실레이션(좌우 진동) 하향
   walkSwayStepCoupling: 1.0,
   walkStride: 0.9,
 
-  instabilityGain: 2.0,
-  instabilityNoise: 0.5,
+  instabilityGain: 2.2, // inverted-pendulum 증폭(쏠림 체감) 약간 상향
+  instabilityNoise: 0.3, // 지터 감소
   damping: 2.0,
   stackHeightSensitivity: 0.3,
 
   counterTorque: 10.0,
   lateralMoveSpeed: 2.2,
   inputSmoothing: 14.0,
-  settleAssist: 2.6,
+  settleAssist: 1.0, // 스프링 복원 하향(진동 감소)
   centerDeadzone: 0.06,
 
-  straightDriftGain: 1.3,
-  driftNoiseScale: 1.6,
+  leanDriftGain: 6.0, // 주력: 지속 방향 쏠림
+  leanDirChangeRate: 0.5, // 방향은 서서히 전환(저주파)
   driftMax: 1.0,
+  speedLeanScale: 0.8,
+  finishLeanScale: 1.0,
 
   maxTilt: 2.5,
   maxTiltVel: 8.0,

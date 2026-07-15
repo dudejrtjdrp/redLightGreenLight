@@ -103,8 +103,8 @@ export class PlayerSystem {
       ((fwdSpeed * dt) / BalanceConfig.walkStride) * Math.PI * 2;
     applyWalkSway(this.mover, this.balanceStepPhase, moveFactor, dt);
 
-    // --- 불안정성 적분(이동 비례; 정지 시 tiltVel 감쇠로 그 자리 홀드) ---
-    integrateTilt(this.mover, dt, moveFactor);
+    // --- 불안정성 적분(쏠림: 이동 비례 + 결승선 근접 비례; 정지 시 그 자리 홀드) ---
+    integrateTilt(this.mover, dt, moveFactor, this.progress);
     // 아슬아슬(danger) 상태 갱신(히스테리시스). 낙하는 이보다 큰 tiltDropThreshold에서만.
     updateDangerState(this.mover);
 

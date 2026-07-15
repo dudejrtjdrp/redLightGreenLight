@@ -24,7 +24,12 @@ export function stackHeightFactor(cargo: number): number {
  * @param moveFactor 정규화 전진속도(0=정지, 1=최대). 불안정/드리프트는 이동량에 비례,
  *                   정지 시엔 브레이스 복원력이 스택을 중심으로 되돌린다.
  */
-export function integrateTilt(mover: Mover, dt: number, moveFactor: number): void {
+export function integrateTilt(
+  mover: Mover,
+  dt: number,
+  moveFactor: number,
+  finishProximity: number,
+): void {
   if (mover.cargo <= 0) {
     mover.tilt = 0;
     mover.tiltVel = 0;
@@ -35,23 +40,29 @@ export function integrateTilt(mover: Mover, dt: number, moveFactor: number): voi
   const hf = stackHeightFactor(mover.cargo);
 
   // 이동량 → 활동도(activity). 멈추면 0, 조금만 움직여도 빠르게 1로.
-  const activity = Math.min(
-    1,
-    Math.max(0, moveFactor) * BalanceConfig.moveInstabilityScale,
-  );
+  const mf = Math.max(0, Math.min(1, moveFactor));
+  const fp = Math.max(0, Math.min(1, finishProximity));
+  const activity = Math.min(1, mf * BalanceConfig.moveInstabilityScale);
   const braceAmt = 1 - activity; // 정지에 가까울수록 1
 
-  // 상시 드리프트(random-walk). 효과는 activity로 게이팅(멈추면 무효).
+  // 쏠림 방향(driftBias): 느린 random-walk → 순간은 확정 방향, 서서히 좌↔우 전환.
   mover.driftBias +=
-    (Math.random() * 2 - 1) * BalanceConfig.driftNoiseScale * dt;
+    (Math.random() * 2 - 1) * BalanceConfig.leanDirChangeRate * dt;
   if (mover.driftBias > BalanceConfig.driftMax) mover.driftBias = BalanceConfig.driftMax;
   else if (mover.driftBias < -BalanceConfig.driftMax) mover.driftBias = -BalanceConfig.driftMax;
 
-  // 양성 피드백 + 드리프트(이동 비례).
-  mover.tiltVel += BalanceConfig.instabilityGain * mover.tilt * hf * activity * dt;
-  mover.tiltVel += BalanceConfig.straightDriftGain * mover.driftBias * activity * dt;
+  // 쏠림 크기: 빠를수록 / 결승선 가까울수록 커짐.
+  const leanScale =
+    (1 + BalanceConfig.speedLeanScale * mf) *
+    (1 + BalanceConfig.finishLeanScale * fp);
 
-  // 미세 노이즈: 데드존 밖 + 이동 중에만.
+  // 주력: 지속 방향 쏠림 드리프트(진동 아님).
+  mover.tiltVel +=
+    BalanceConfig.leanDriftGain * mover.driftBias * leanScale * activity * dt;
+  // inverted-pendulum: 현재 기운 방향을 증폭(한쪽으로 넘어가려는 쏠림).
+  mover.tiltVel += BalanceConfig.instabilityGain * mover.tilt * hf * activity * dt;
+
+  // 미세 노이즈(감소): 데드존 밖 + 이동 중에만.
   if (Math.abs(mover.tilt) >= BalanceConfig.centerDeadzone) {
     mover.tiltVel +=
       (Math.random() * 2 - 1) * BalanceConfig.instabilityNoise * activity * dt;
