@@ -2,3 +2,7 @@ node_modules
 dist
 *.local
 .DS_Store
+
+# KayKit 원본 에셋팩 (fbx/obj/gltf 원본) - 코드에서 미사용, 용량만 큼
+src/public/KayKit_Adventurers_2.0_FREE/
+src/public/assets/

@@ -2,12 +2,14 @@
  * GameRenderer.ts
  * 게임 시각 레이어 통합. 데이터(무버/짐/술래) → 메쉬 동기화 + 이펙트 + 카메라 추적.
  * update(dt)는 GameLoop.update 안에서 sim 이후 호출(시각은 데이터 뒤따름).
- * 모든 뷰는 사전생성 + 풀링. 이 클래스에서 매 프레임 new 없음.
+ *
+ * 아바타: 절차적(MoverView)로 즉시 시작 → KayKit glb(CharacterView) 로드 성공 시 교체(폴백 안전).
  */
 
 import * as THREE from "three";
 import { SceneManager } from "./SceneManager";
 import { MoverView } from "./MoverView";
+import { CharacterView } from "./CharacterView";
 import { SeekerView } from "./SeekerView";
 import { DroppedItemsView } from "./DroppedItemsView";
 import { EffectSystem } from "./EffectSystem";
@@ -19,16 +21,27 @@ import { Mover } from "../gameplay/Mover";
 import { CargoSystem } from "../gameplay/CargoSystem";
 import "../gameplay/GameplayEvents";
 
+/** 절차적/​glb 아바타 공통 인터페이스. */
+interface MoverAvatar {
+  readonly group: THREE.Object3D;
+  setPhase(phase: RoundPhase): void;
+  addFlinch(impulse: number): void;
+  flash(impulse: number): void;
+  getBoxWorldPosition(index: number, out: THREE.Vector3): THREE.Vector3;
+  update(dt: number): void;
+}
+
 export class GameRenderer {
-  private readonly moverView: MoverView;
+  /** 현재 활성 아바타(절차적 또는 glb). */
+  private avatar: MoverAvatar;
   private readonly seekerView: SeekerView;
   private readonly droppedView: DroppedItemsView;
   private readonly effects: EffectSystem;
 
-  // 스크린셰이크 상태
+  private currentPhase: RoundPhase = RoundPhase.GREEN;
+
   private shakeEnergy = 0;
   private shakeTime = 0;
-  /** 낙하 아크 시작점 계산용 재사용 벡터(할당 방지). */
   private readonly scratch = new THREE.Vector3();
 
   constructor(
@@ -36,43 +49,57 @@ export class GameRenderer {
     private readonly player: Mover,
     cargo: CargoSystem,
   ) {
-    this.moverView = new MoverView(player);
+    const moverView = new MoverView(player);
+    this.avatar = moverView; // 폴백/기본
     this.seekerView = new SeekerView();
     this.droppedView = new DroppedItemsView(cargo);
     this.effects = new EffectSystem();
 
     const scene = sceneManager.scene;
-    scene.add(this.moverView.group);
+    scene.add(this.avatar.group);
     scene.add(this.seekerView.group);
     scene.add(this.droppedView.group);
     scene.add(this.effects.group);
 
-    // 페이즈 → 술래 회전 + 카멜레온 색 변화.
     gameBus.on("phase:change", ({ to }) => {
+      this.currentPhase = to;
       this.seekerView.setPhase(to);
-      this.moverView.setPhase(to);
+      this.avatar.setPhase(to);
     });
-    // 낙하 주스: 움찔 + 스크린셰이크 + 아크 연출.
-    // 아크 시작점(from)은 방금 분리된 맨 위 짐의 "실제 월드 좌표"(팝인 방지).
-    // 분리 후 mover.cargo는 이미 -1 → 그 값이 곧 떨어진 박스의 인덱스.
     gameBus.on("item:dropped", (payload) => {
-      this.moverView.addFlinch(ArtConfig.flinch.dropImpulse);
+      this.avatar.addFlinch(ArtConfig.flinch.dropImpulse);
       this.addScreenShake(ArtConfig.screenShake.dropEnergy);
-      const from = this.moverView.getBoxWorldPosition(this.player.cargo, this.scratch);
+      const from = this.avatar.getBoxWorldPosition(this.player.cargo, this.scratch);
       this.effects.spawn(from, payload.to);
     });
-    // 탈락 주스: 스크린셰이크(카멜레온 굳음/눈 뱅글은 MoverView가 status로 처리).
     gameBus.on("mover:caught", () =>
       this.addScreenShake(ArtConfig.screenShake.caughtEnergy),
     );
-    // 경고 주스: 카멜레온 흰색 플래시 + 술래 응시 강화.
     gameBus.on("mover:warned", () => {
-      this.moverView.flash(ArtConfig.warnFlash.impulse);
+      this.avatar.flash(ArtConfig.warnFlash.impulse);
       this.seekerView.pulse(ArtConfig.seekerPulse.impulse);
     });
 
     this.seekerView.setPhase(RoundPhase.GREEN);
-    this.moverView.setPhase(RoundPhase.GREEN);
+    this.avatar.setPhase(RoundPhase.GREEN);
+
+    // KayKit glb 비동기 로드 → 성공 시 절차적 아바타를 교체.
+    void this.tryLoadCharacter(moverView);
+  }
+
+  private async tryLoadCharacter(fallback: MoverView): Promise<void> {
+    try {
+      const cv = await CharacterView.create(this.player, ArtConfig.scene.shadows);
+      if (!cv) return; // 폴백 유지
+      // 교체: 절차적 제거 → glb 추가.
+      this.sceneManager.scene.remove(fallback.group);
+      this.sceneManager.scene.add(cv.group);
+      cv.setPhase(this.currentPhase);
+      this.avatar = cv;
+      console.log("[KayKit] glb 아바타로 교체 완료");
+    } catch (e) {
+      console.warn("[KayKit] 캐릭터 초기화 실패 → 절차적 유지:", e);
+    }
   }
 
   private addScreenShake(energy: number): void {
@@ -80,13 +107,11 @@ export class GameRenderer {
   }
 
   update(dt: number): void {
-    // 스택 흔들림은 이제 데이터 tilt가 소스(MoverView가 직접 반영).
-    this.moverView.update(dt);
+    this.avatar.update(dt); // mixer.update(dt) 포함(glb일 때)
     this.seekerView.update(dt);
     this.droppedView.update();
     this.effects.update(dt);
 
-    // 스크린셰이크 감쇠.
     if (this.shakeEnergy > 0) {
       this.shakeTime += dt;
       this.shakeEnergy = Math.max(
@@ -98,7 +123,6 @@ export class GameRenderer {
     this.followCamera();
   }
 
-  /** 카메라가 무버를 뒤에서 추적 + 스크린셰이크 오프셋. */
   private followCamera(): void {
     const cam = this.sceneManager.camera;
     const c = EffectConfig.camera;
