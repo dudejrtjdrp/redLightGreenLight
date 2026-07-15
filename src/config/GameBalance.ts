@@ -59,15 +59,25 @@ export const GameBalance = {
     step: 0.28,
   },
 
-  /** 점수 규칙 */
+  /**
+   * 점수 규칙 — "북극성" 튜닝 손잡이 집합.
+   * 기대 술래 점수 ≈ 기대 1등 무버 점수가 되도록 아래 값만 조절한다.
+   * 관련 손잡이:
+   *   - survivorBonusK : 생존 희소성 보너스 크기(무버측 후반 가속).
+   *   - dropPointScale : 낙하 1개당 술래 점수 배율(술래측 파밍 가치).
+   *   - catchBonusScale: 잡기 가속 보너스 배율(술래측 후반 가속).
+   *   - 짐 상한(=무버 점수 상한)은 ItemConfig.maxPerPlayer / PlayerConfig.startingCargo.
+   */
   score: {
-    /** 짐 1개 = 1점 */
+    /** 짐 1개 = 1점 (무버 반입 짐 점수) */
     cargoPoint: 1,
     /** 생존 보너스 상수 K. 1인당 보너스 = K / 생존자수 (8인 기준 K=24) */
     survivorBonusK: 24,
+    /** 낙하 짐 1개당 술래 점수 배율. 기본 1(= 낙하 1개 = 술래 1점). */
+    dropPointScale: 1,
     /**
      * 잡은 인원 보너스(가속): c번째로 잡으면 c점, 누적 c(c+1)/2.
-     * (선형 가중치 = c 이므로 별도 상수는 없지만 확장 대비 배율만 노출)
+     * 이 배율로 전체 가속 강도를 조절(기본 1).
      */
     catchBonusScale: 1,
   },

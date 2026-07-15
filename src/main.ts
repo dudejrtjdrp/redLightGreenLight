@@ -5,6 +5,7 @@
  * Phase 2: 라운드 상태머신 + 게임플레이 데이터 모델(무버/술래/짐).
  * Phase 3: 입력 + 무버 이동(fake physics) + 레드라이트 즉시 탈락 + 완주 판정.
  * Phase 4: 급정지 짐 낙하 + 트랙 잔류 + 회수 + 점수 귀속(자해 구조 검증).
+ * Phase 5: 최종 점수 정산(반입 짐 + 생존보너스 / 낙하 + 잡기보너스) + 라운드 종료 + 정합성 시뮬.
  *          렌더 반영은 아직(무버/짐 시각화는 이후). 규칙 동작을 HUD/콘솔로 검증.
  */
 
@@ -20,6 +21,8 @@ import { vec2 } from "./gameplay/types";
 import { InputController } from "./input/InputController";
 import { PlayerSystem } from "./gameplay/PlayerSystem";
 import { CargoSystem } from "./gameplay/CargoSystem";
+import { ScoreSystem } from "./gameplay/ScoreSystem";
+import { simulateReference } from "./gameplay/BalanceDebug";
 // emit 지점 헬퍼/EventMap 선언 병합 로드 보장.
 import "./gameplay/GameplayEvents";
 
@@ -40,10 +43,16 @@ const cargo = new CargoSystem(seeker, player.cargo + 4);
 cargo.spawnInitial(player); // 시작 짐 5개를 풀에서 대여해 소유로 부여
 const playerSystem = new PlayerSystem(player, input, round, cargo);
 const movers = [player] as const;
+const scoreSystem = new ScoreSystem(seeker, movers);
+
+// 시작 시 정합성 시뮬(8인 예시: 술래 ≈16 vs 1등무버 ≈11)을 콘솔에 1회 출력.
+simulateReference();
 
 // --- 이벤트 구독(로그) ---
 gameBus.on("phase:change", ({ from, to }) => {
   console.log(`[round] ${from} → ${to} @ ${round.elapsedRound.toFixed(1)}s`);
+  // 종료 진입 시 정산 1회.
+  if (to === RoundPhase.END) scoreSystem.settle();
 });
 gameBus.on("mover:caught", ({ moverId }) => {
   console.log(`[OUT] mover ${moverId} 레드 중 이동 → 탈락`);
@@ -55,6 +64,14 @@ gameBus.on("mover:finished", ({ moverId, cargoDelivered }) => {
 gameBus.on("item:dropped", ({ itemId, byMoverId }) => {
   console.log(`[EVENT] item:dropped #${itemId} by mover ${byMoverId}`);
 });
+
+/** 전원 완주/탈락 여부(라운드 조기 종료 판정). */
+function allMoversDone(): boolean {
+  return movers.every(
+    (m) =>
+      m.status === MoverStatus.FINISHED || m.status === MoverStatus.CAUGHT,
+  );
+}
 
 // --- HUD 계측 ---
 let simSteps = 0;
@@ -69,7 +86,11 @@ const loop = new GameLoop(
       // 상태머신이 RED→RESOLVE로 넘어가기 전에 반영(빈 턴 반환 정확도).
       playerSystem.update(dt);
       cargo.updateRecovery(movers); // 반경 기반 회수(뒤 무버만)
-      round.update(dt);
+      round.update(dt); // 시간 초과 시 여기서 END 전이
+
+      // 전원 완주/탈락 시 즉시 종료(시간 초과 전이라도).
+      if (round.isActive && allMoversDone()) round.forceEnd();
+
       gameBus.emit("loop:update", { dt });
     },
     render: (alpha: number) => {
@@ -88,14 +109,20 @@ if (hud) {
     const mode = player.speedMode === SpeedMode.FAST ? "빠름(100%)" : "신중(50%)";
     const holding = input.isForward ? "전진" : "정지";
     const speed = Math.abs(player.velocity.z).toFixed(2);
+    const ended = round.phase === RoundPhase.END;
+    // 라이브 점수(종료 전엔 잠정치): 무버 점수 = 반입 짐 + 생존보너스, 술래 = 낙하 + 잡기보너스.
+    const myScore = scoreSystem.moverScore(player).toFixed(1);
+    const seekerScore = scoreSystem.seekerScore().toFixed(1);
     hud.textContent =
-      `무궁화 밸런스 게임 — Phase 4 (Cargo/Drop/Recover)\n` +
+      `무궁화 밸런스 게임 — Phase 5 (Score/RoundEnd)\n` +
       `[조작] 전진: Space/W/↑ (hold)  |  모드토글: Shift/E\n` +
       `phase: ${RoundPhaseName[round.phase]} (${round.phase})   round: ${round.elapsedRound.toFixed(1)}s\n` +
       `mode: ${mode}  input: ${holding}  speed: ${speed}\n` +
       `progress: ${(playerSystem.progress * 100).toFixed(0)}%  status: ${player.status}\n` +
       `내 짐: ${player.cargo}  |  트랙 낙하물: ${cargo.droppedCount}\n` +
-      `술래 점수: ${seeker.score} (낙하수확 ${seeker.droppedCargoClaimed}, 잡음 ${seeker.catches})\n` +
+      `내 점수(잠정): ${myScore}  |  술래 점수(잠정): ${seekerScore}\n` +
+      `술래 상세: 낙하 ${seeker.droppedCargoClaimed}, 잡음 ${seeker.catches}\n` +
+      (ended ? `★ ROUND END — 콘솔에서 최종 정산 확인 ★\n` : ``) +
       `fps: ${fps}`;
   }, 250);
 }
@@ -125,4 +152,6 @@ round.start();
   cargo,
   input,
   playerSystem,
+  scoreSystem,
+  simulateReference, // 콘솔에서 __game.simulateReference({seekerCatches:5}) 등으로 튜닝 실험
 };
