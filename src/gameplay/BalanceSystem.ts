@@ -25,6 +25,7 @@ export function integrateTilt(mover: Mover, dt: number): void {
     mover.tilt = 0;
     mover.tiltVel = 0;
     mover.driftBias = 0;
+    mover.inDanger = false;
     return;
   }
   const hf = stackHeightFactor(mover.cargo);
@@ -45,7 +46,11 @@ export function integrateTilt(mover: Mover, dt: number): void {
       (Math.random() * 2 - 1) * BalanceConfig.instabilityNoise * dt;
   }
 
-  mover.tiltVel -= mover.tiltVel * BalanceConfig.damping * dt; // 감쇠(마찰)
+  // 감쇠(마찰). danger 구간에선 추가 감쇠로 가장자리에 머물게("어어어").
+  const damp = mover.inDanger
+    ? BalanceConfig.damping + BalanceConfig.dangerDamping
+    : BalanceConfig.damping;
+  mover.tiltVel -= mover.tiltVel * damp * dt;
   mover.tilt += mover.tiltVel * dt;
 
   // 데드존: 중심 근처 저속이면 미세 떨림을 적극 감쇠(완전 정지는 아님).
@@ -63,6 +68,17 @@ export function integrateTilt(mover: Mover, dt: number): void {
 /** 입력 중립 시 중심으로 끌어오는 약한 복원(settle-assist). 완전 자동복구는 아님. */
 export function applySettleAssist(mover: Mover, dt: number): void {
   mover.tiltVel -= BalanceConfig.settleAssist * mover.tilt * dt;
+}
+
+/**
+ * 아슬아슬(danger) 상태 갱신 — 히스테리시스로 깜빡임 방지.
+ *  |tilt| ≥ tiltDangerThreshold → danger 진입.
+ *  |tilt| ≤ tiltDangerRecover   → danger 해제. (그 사이는 상태 유지)
+ */
+export function updateDangerState(mover: Mover): void {
+  const a = Math.abs(mover.tilt);
+  if (a >= BalanceConfig.tiltDangerThreshold) mover.inDanger = true;
+  else if (a <= BalanceConfig.tiltDangerRecover) mover.inDanger = false;
 }
 
 /** 급정지 킥. vStop = 정지 직전 속력. 빠를수록 큰 킥. */

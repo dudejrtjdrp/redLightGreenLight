@@ -61,6 +61,7 @@ export class MoverView {
   private prevX = 0;
   private prevZ = 0;
   private visTilt = 0;
+  private animTime = 0;
   private flinchEnergy = 0;
   private flashEnergy = 0;
 
@@ -198,6 +199,7 @@ export class MoverView {
     const h = VisualConfig.humanoid;
     const w = VisualConfig.walk;
     const caught = this.mover.status === MoverStatus.CAUGHT;
+    this.animTime += dt;
 
     // 위치 + 전진 방향(-z).
     this.group.position.x = this.mover.position.x;
@@ -234,6 +236,13 @@ export class MoverView {
         this.flashEnergy - ArtConfig.warnFlash.decayPerSec * dt,
       );
       this.bodyMat.emissive.addScalar(this.flashEnergy * ArtConfig.warnFlash.strength);
+    }
+    // 아슬아슬(danger): 붉은 강조 깜빡임(낙하 예고). 탈락/완주 아닐 때만.
+    const danger = this.mover.inDanger && !caught;
+    if (danger) {
+      const d = VisualConfig.danger;
+      const pulse = (0.5 + 0.5 * Math.sin(this.animTime * d.emissiveFreq)) * d.emissivePulse;
+      this.bodyMat.emissive.r += pulse;
     }
     this.bodyMat.emissiveIntensity =
       this.mover.speedMode === SpeedMode.FAST && !caught ? 1.1 : 0.85;
@@ -279,11 +288,17 @@ export class MoverView {
     // --- 짐 개수 표시 + tilt 수평 전단(바닥 피벗 회전 없음) ---
     const st = ArtConfig.stackTilt;
     this.visTilt += (this.mover.tilt - this.visTilt) * Math.min(1, st.follow * dt);
+    const topIdx = this.mover.cargo - 1; // 맨 위 짐
     for (let i = 0; i < this.boxes.length; i++) {
       this.boxes[i].visible = i < this.mover.cargo;
       let ox = this.visTilt * st.shearPerLevel * i;
       if (ox > st.maxShear) ox = st.maxShear;
       else if (ox < -st.maxShear) ox = -st.maxShear;
+      // 아슬아슬: 맨 위 짐은 가장자리에서 미세하게 wobble(떨어질랑말랑).
+      if (danger && i >= topIdx - 1 && i >= 0) {
+        const d = VisualConfig.danger;
+        ox += Math.sin(this.animTime * d.wobbleFreq + i) * d.wobbleAmp;
+      }
       this.boxes[i].position.x = ox;
     }
   }

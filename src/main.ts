@@ -92,6 +92,7 @@ const loop = new GameLoop(
       // 순서 주의: 플레이어를 먼저 갱신해 이번 프레임 RED 활동을
       // 상태머신이 RED→RESOLVE로 넘어가기 전에 반영(빈 턴 반환 정확도).
       playerSystem.update(dt);
+      cargo.updateFlights(dt); // 비행 중 낙하 짐 착지 → 회수 가능 전환
       cargo.updateRecovery(movers); // 반경 기반 회수(뒤 무버만)
       round.update(dt); // 시간 초과 시 여기서 END 전이
 

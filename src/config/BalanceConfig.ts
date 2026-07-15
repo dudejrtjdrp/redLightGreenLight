@@ -13,12 +13,21 @@ export interface BalanceConfigShape {
   /** 급정지 킥 세기: tiltVel += impulseScale * max(0, vStop - safeSpeed) * 방향. */
   impulseScale: number;
 
-  /** |tilt| 이 값을 넘으면 위쪽 짐부터 낙하. */
+  /** 아슬아슬 시작(맨 위 짐이 가장자리에 걸침). 아직 낙하 X, 위험 연출만. */
+  tiltDangerThreshold: number;
+  /** 히스테리시스: danger 진입 후 이 값 아래로 내려오면 복구(깜빡임 방지). */
+  tiltDangerRecover: number;
+  /** danger 구간 추가 감쇠(넘어가기 직전 "어어어" 하며 가장자리에 머물게). */
+  dangerDamping: number;
+
+  /** |tilt| 이 값을 넘겨야 실제로 맨 위 짐이 탈락(진짜 한계, danger보다 확실히 큼). */
   tiltDropThreshold: number;
   /** 초과량 → 낙하 개수 단위(ceil(over/step)). */
   tiltDropStep: number;
   /** 낙하 후 tilt를 곱해 완화(자기보정). */
   tiltReliefFactor: number;
+  /** 낙하 짐이 바깥으로 밀려나 착지하는 수평 거리(회수 위치 = 착지점). */
+  dropLandingSpread: number;
 
   /** 불안정 양성 피드백 계수(안 잡으면 쏠려 넘어감). */
   instabilityGain: number;
@@ -63,9 +72,14 @@ export const BalanceConfig: BalanceConfigShape = {
   safeSpeed: 1.2,
   impulseScale: 0.8,
 
-  tiltDropThreshold: 1.0,
+  tiltDangerThreshold: 1.0,
+  tiltDangerRecover: 0.72,
+  dangerDamping: 3.5,
+
+  tiltDropThreshold: 1.7, // 진짜 한계(과거 1.0 → 크게 상향: 중간 기울기로는 안 떨어짐)
   tiltDropStep: 0.5,
   tiltReliefFactor: 0.45,
+  dropLandingSpread: 0.8,
 
   instabilityGain: 2.0,
   instabilityNoise: 0.5,

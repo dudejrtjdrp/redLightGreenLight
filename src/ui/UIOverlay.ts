@@ -85,7 +85,7 @@ export class UIOverlay {
     this.stats.textContent =
       `타이머: ${round.elapsedRound.toFixed(1)}s\n` +
       `내 짐: ${player.cargo}   진행: ${this.progressPct()}%\n` +
-      `균형: ${tiltBar}\n` +
+      `균형: ${tiltBar}${player.inDanger ? "  ⚠ 아슬아슬!" : ""}\n` +
       `경고: ${player.warnings} / ${BalanceConfig.warningMax}\n` +
       `내 상태: ${this.statusKo(player)}`;
 

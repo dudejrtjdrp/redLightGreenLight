@@ -16,18 +16,33 @@
  */
 
 import { gameBus } from "../core/EventBus";
-import { Item, ItemState } from "./Item";
 import { Mover, MoverStatus } from "./Mover";
-import { Vec2, copyVec2 } from "./types";
+import { Vec2 } from "./types";
 import { RoundPhase } from "./RoundState";
+
+/** 3D 좌표(낙하 아크 from/to용). */
+interface Vec3 {
+  x: number;
+  y: number;
+  z: number;
+}
 
 // --- EventMap 선언 병합 (core/EventBus.ts는 건드리지 않음) ---
 declare module "../core/EventBus" {
   interface EventMap {
     /** 라운드 페이즈 전환 */
     "phase:change": { from: RoundPhase; to: RoundPhase };
-    /** 짐 낙하: 낙하한 짐 1개당 1회 emit (술래 +1점 근거) */
-    "item:dropped": { itemId: number; byMoverId: number; position: Vec2 };
+    /**
+     * 짐 낙하(분리 시점 emit). position=착지(회수) 좌표.
+     * from=손/스택 이탈 지점, to=착지 지점(비행 아크 연출용).
+     */
+    "item:dropped": {
+      itemId: number;
+      byMoverId: number;
+      position: Vec2;
+      from: Vec3;
+      to: Vec3;
+    };
     /** 무버 체포: 레드 때 전진 이동 또는 경고 누적 초과로 탈락 */
     "mover:caught": { moverId: number };
     /** 무버 완주: 도착 지점 진입 */
@@ -35,24 +50,6 @@ declare module "../core/EventBus" {
     /** RED 중 균형(A/D) 보정 1회 경고 누적(시각 플래시/술래 응시용) */
     "mover:warned": { moverId: number; warnings: number };
   }
-}
-
-/**
- * emit 지점 헬퍼들.
- * 다음 Phase(입력/충돌/판정)에서 실제 조건이 만족될 때 호출한다.
- * 지금은 "상태 전이 + emit"만 하고, 점수 정산 등 파생 처리는 구독자 몫(추후).
- */
-
-/** 짐을 트랙에 낙하시키고 이벤트 발행. (급정지 낙하 모델의 결과 반영 지점) */
-export function emitItemDropped(item: Item, byMoverId: number, position: Vec2): void {
-  item.state = ItemState.DROPPED;
-  item.ownerId = null;
-  item.position = copyVec2(position);
-  gameBus.emit("item:dropped", {
-    itemId: item.id,
-    byMoverId,
-    position: copyVec2(position),
-  });
 }
 
 /** 무버를 체포(탈락) 처리하고 이벤트 발행. (레드 중 이동 감지 지점) */

@@ -26,6 +26,7 @@ import {
   applyStopImpulse,
   applyCounter,
   applySettleAssist,
+  updateDangerState,
   tiltDropCount,
   relieveAfterDrop,
 } from "./BalanceSystem";
@@ -91,6 +92,8 @@ export class PlayerSystem {
 
     // --- 불안정성 적분(안 잡으면 쏠림, 직진 중에도 드리프트) ---
     integrateTilt(this.mover, dt);
+    // 아슬아슬(danger) 상태 갱신(히스테리시스). 낙하는 이보다 큰 tiltDropThreshold에서만.
+    updateDangerState(this.mover);
 
     // 경고 디바운스 타이머 감소(항상).
     this.mover.warnCooldown = Math.max(0, this.mover.warnCooldown - dt);

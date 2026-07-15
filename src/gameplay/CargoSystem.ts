@@ -21,18 +21,28 @@
 
 import { gameBus } from "../core/EventBus";
 import { ItemConfig } from "../config/ItemConfig";
+import { BalanceConfig } from "../config/BalanceConfig";
+import { EffectConfig } from "../config/EffectConfig";
 import { Item, ItemPool } from "./Item";
 import { Mover, MoverStatus } from "./Mover";
 import { Seeker } from "./Seeker";
 // EventMap 선언 병합 로드 보장(item:dropped 타입).
 import "./GameplayEvents";
 
+/** 착지 대기 중인 낙하 짐(비행 애니 동안 회수/표시 X). */
+interface PendingDrop {
+  item: Item;
+  timer: number;
+}
+
 export class CargoSystem {
   private readonly pool: ItemPool;
   /** 무버별 보유 짐 실체(개수는 mover.cargo와 동기). */
   private readonly ownedByMover = new Map<number, Item[]>();
-  /** 트랙 위에 낙하해 남아있는 짐들. */
+  /** 트랙 위에 착지해 남아있는(회수 가능) 낙하 짐들. */
   private readonly dropped: Item[] = [];
+  /** 분리됐지만 아직 비행 중(착지 전)인 낙하 짐들. */
+  private readonly pending: PendingDrop[] = [];
 
   constructor(
     private readonly seeker: Seeker,
@@ -69,16 +79,25 @@ export class CargoSystem {
     return n;
   }
 
-  /** 낙하 1개 처리 + 자해 구조 검증 로그 + item:dropped emit. */
+  /**
+   * 낙하 1개 처리(분리 시점): 카운트/점수/emit은 지금, 회수 가능화는 착지 후.
+   *  - 짐은 tilt 방향 바깥으로 밀려나 착지(landing = 회수 위치).
+   *  - 비행 동안은 pending(표시/회수 X). 착지(updateFlights) 후 dropped로 전환.
+   */
   private dropOne(mover: Mover, item: Item): void {
     const cargoBefore = mover.cargo;
     const seekerBefore = this.seeker.score;
 
-    // 트랙에 낙하 상태로 잔류(소멸/반환 X).
-    this.pool.setDropped(item, mover.position);
+    // 넘어가는 방향(tilt 부호)으로 바깥에 착지.
+    const dir =
+      mover.tilt > 0.001 ? 1 : mover.tilt < -0.001 ? -1 : Math.random() < 0.5 ? -1 : 1;
+    const spread = BalanceConfig.dropLandingSpread;
+    const landing = { x: mover.position.x + dir * spread, z: mover.position.z };
+
+    // 착지 좌표를 낙하 위치로 설정(회수는 여기서). 단 pending 동안은 미노출/미회수.
+    this.pool.setDropped(item, landing);
     item.dropperId = mover.id;
     mover.cargo -= 1;
-    this.dropped.push(item);
 
     // 술래 가점: 재수확 상한 내에서만(무한 faucet 방지).
     let seekerGained = 0;
@@ -90,13 +109,11 @@ export class CargoSystem {
     }
 
     // === 자해 구조 검증 ===
-    // 내 짐은 반드시 정확히 1 감소(잠재 점수 손실). 술래는 상한 내 +1(이득).
-    // 상한 내에서 스윙 = -1(나) + +1(술래) = 2점. 상한 초과 시 스윙 = 1점(나만 손해).
     console.assert(
       mover.cargo === cargoBefore - 1,
       "[BUG] 낙하 시 소유 무버 짐이 정확히 1 감소해야 함",
     );
-    const swing = 1 + seekerGained; // 나 손실 1 + 술래 이득
+    const swing = 1 + seekerGained;
     console.log(
       `[DROP] item#${item.id} by mover ${mover.id} | ` +
         `cargo ${cargoBefore}→${mover.cargo} | ` +
@@ -104,11 +121,29 @@ export class CargoSystem {
         `swing ${swing}점 | harvest ${item.harvestCount}/${ItemConfig.maxSeekerHarvestPerItem}`,
     );
 
+    // 비행 대기열에 등록(착지 후 회수 가능). onItemDropped는 분리 시점에 emit(from→to 포함).
+    const dur = EffectConfig.dropFlight.duration;
+    this.pending.push({ item, timer: dur });
     gameBus.emit("item:dropped", {
       itemId: item.id,
       byMoverId: mover.id,
-      position: { x: mover.position.x, z: mover.position.z },
+      position: { x: landing.x, z: landing.z },
+      from: { x: mover.position.x + dir * 0.18, y: 1.15, z: mover.position.z - 0.34 },
+      to: { x: landing.x, y: ItemConfig.visualSize * 0.7, z: landing.z },
     });
+  }
+
+  /** 비행 중 낙하 짐의 착지 처리. 착지하면 회수 가능한 dropped로 전환. */
+  updateFlights(dt: number): void {
+    if (this.pending.length === 0) return;
+    for (let i = this.pending.length - 1; i >= 0; i--) {
+      const p = this.pending[i];
+      p.timer -= dt;
+      if (p.timer <= 0) {
+        this.pending.splice(i, 1);
+        this.dropped.push(p.item); // 이제 트랙 위 낙하물(표시/회수 가능)
+      }
+    }
   }
 
   /**

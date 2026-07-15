@@ -39,6 +39,18 @@ export const EffectConfig = {
     turnSpeed: 4.2,
   },
 
+  /**
+   * 낙하 아크 연출: 손/스택(from)에서 착지(to)까지 포물선 비행(Object Pool).
+   * duration은 CargoSystem의 착지 대기(회수 가능 전환) 시간과 공유.
+   */
+  dropFlight: {
+    poolSize: 24,
+    size: 0.2,
+    duration: 0.75,
+    arcHeight: 0.9,
+    tumble: 3.0,
+  },
+
   /** 트랙 위 낙하물 표시 풀 크기(초과분은 표시 생략). */
   droppedPoolSize: 40,
 
