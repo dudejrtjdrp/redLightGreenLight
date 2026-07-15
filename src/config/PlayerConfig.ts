@@ -16,6 +16,21 @@ export const PlayerConfig = {
 
   /** 무버 시각 반경 (렌더/충돌 판정용) */
   radius: 0.4,
+
+  /**
+   * Phase 3 개정: 짐 개수 기반 속도 배율(itemSpeedFactor) 곡선.
+   * 최종속도 = baseMoveSpeed × 속도모드 × itemSpeedFactor(cargo).
+   * 짐 0개=최대, 짐 많을수록 느림(선형, 하한 있음).
+   *   - maxFactor   : 짐 0개일 때 배율(가장 빠름).
+   *   - normalFloor : 정상 상한(referenceCargo개=ItemConfig.maxPerPlayer)일 때 배율(정상 최소).
+   *   - minFactor   : 절대 하한. 스캐빈저가 상한 초과로 주워도 이 아래로는 안 느려짐(조작 가능 보장).
+   * referenceCargo 초과분은 같은 기울기로 계속 느려지다 minFactor에서 바닥 → 과적 자기제한.
+   */
+  itemSpeed: {
+    maxFactor: 1.4,
+    normalFloor: 0.7,
+    minFactor: 0.55,
+  },
 } as const;
 
 export type PlayerConfigType = typeof PlayerConfig;

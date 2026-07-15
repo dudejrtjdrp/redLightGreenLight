@@ -12,7 +12,21 @@
 
 import { PlayerConfig } from "../config/PlayerConfig";
 import { GameBalance } from "../config/GameBalance";
+import { ItemConfig } from "../config/ItemConfig";
 import { Mover, MoverStatus, SpeedMode } from "./Mover";
+
+/**
+ * 짐 개수 기반 속도 배율(Phase 3 개정).
+ * 짐 0개=maxFactor, referenceCargo(=ItemConfig.maxPerPlayer)개=normalFloor,
+ * 초과분은 같은 기울기로 계속 감소하되 minFactor에서 바닥(과적 자기제한).
+ */
+export function itemSpeedFactor(cargo: number): number {
+  const { maxFactor, normalFloor, minFactor } = PlayerConfig.itemSpeed;
+  const ref = ItemConfig.maxPerPlayer;
+  const slope = (maxFactor - normalFloor) / ref; // 짐 1개당 감속
+  const raw = maxFactor - slope * cargo;
+  return Math.max(minFactor, Math.min(maxFactor, raw));
+}
 
 /**
  * 한 스텝 이동 적분.
@@ -32,8 +46,10 @@ export function stepMovement(mover: Mover, holding: boolean, dt: number): number
     ? GameBalance.stabilize.fast
     : GameBalance.stabilize.careful;
 
-  const maxSpeed = PlayerConfig.baseMoveSpeed * speedMul;
-  // 감속도: 해당 모드 안정화 시간에 max→0 이 되도록 유도.
+  // 최종 속도 = base × 속도모드 × 짐개수배율(짐 적을수록 빠름).
+  const maxSpeed =
+    PlayerConfig.baseMoveSpeed * speedMul * itemSpeedFactor(mover.cargo);
+  // 감속도: 해당 모드 안정화 시간에 max→0 이 되도록 유도(배율에 비례 → 정지시간 유지).
   const decel = maxSpeed / stabilize;
 
   let speed = -mover.velocity.z; // 전진 속력(+)

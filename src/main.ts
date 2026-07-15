@@ -20,6 +20,7 @@ import { createSeeker } from "./gameplay/Seeker";
 import { vec2 } from "./gameplay/types";
 import { InputController } from "./input/InputController";
 import { PlayerSystem } from "./gameplay/PlayerSystem";
+import { itemSpeedFactor } from "./gameplay/MovementSystem";
 import { CargoSystem } from "./gameplay/CargoSystem";
 import { ScoreSystem } from "./gameplay/ScoreSystem";
 import { simulateReference } from "./gameplay/BalanceDebug";
@@ -123,7 +124,7 @@ if (hud) {
       `무궁화 밸런스 게임 — Phase 4rev (Balance Kick)\n` +
       `[조작] 전진 W/Space/↑ | 균형 A·D(←→) | 모드 Shift/E\n` +
       `phase: ${RoundPhaseName[round.phase]}  mode: ${mode}  ${holding}  v=${speed}\n` +
-      `tilt: ${player.tilt.toFixed(2)}  vel: ${player.tiltVel.toFixed(2)}  warn: ${player.warnings}\n` +
+      `짐:${player.cargo} 속도배율:${itemSpeedFactor(player.cargo).toFixed(2)}x  tilt:${player.tilt.toFixed(2)} warn:${player.warnings}\n` +
       `sim: ${simSteps}  fps: ${fps}`;
   }, 250);
 }
