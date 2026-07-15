@@ -20,8 +20,8 @@ export const AssetConfig = {
    */
   character: {
     path: "/assets/gltf/Knight.glb",
-    /** 발밑 원점 기준 스케일 보정. */
-    scale: 1.0,
+    /** 발밑 원점 기준 스케일 보정(짐이 잘 보이게 살짝 축소). */
+    scale: 0.82,
     /** 모델 정면이 -Z가 되도록 하는 yaw 보정(라디안). 모델 자체는 수정 금지. */
     yawOffset: 0,
   },
@@ -61,7 +61,7 @@ export const AssetConfig = {
   bodyLeanPivotHeight: 0.9, // 잔여 회전의 축 높이(허리/가슴 → base가 호를 안 그리게)
 
   /** 짐 스택 부착: 손 본이 없으면 이 로컬 좌표(캐릭터 앞/가슴 높이)에 얹는다. */
-  stackAnchor: { x: 0, y: 1.05, z: 0.28 },
+  stackAnchor: { x: 0, y: 1.12, z: 0.28 },
   /** 손 본 이름 후보(부분일치). 찾으면 그 본에 스택 부착. */
   handBoneCandidates: [
     "handslot",

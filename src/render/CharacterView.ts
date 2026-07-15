@@ -19,10 +19,11 @@ import { ArtConfig } from "../config/ArtConfig";
 import { VisualConfig } from "../config/VisualConfig";
 import { AssetConfig } from "../config/AssetConfig";
 
+const CARGO_S = ItemConfig.visualScale;
 const CARGO_GEO = new THREE.BoxGeometry(
-  ItemConfig.visualSize * 2,
-  ItemConfig.stackGap * 0.9,
-  ItemConfig.visualSize * 2,
+  ItemConfig.visualSize * 2 * CARGO_S,
+  ItemConfig.stackGap * 0.9 * CARGO_S,
+  ItemConfig.visualSize * 2 * CARGO_S,
 );
 const CARGO_MAT = new THREE.MeshStandardMaterial({ color: 0xffcc44, roughness: 0.7 });
 
@@ -183,7 +184,7 @@ export class CharacterView {
     this.contentNode.add(this.stack);
     for (let i = 0; i < ItemConfig.maxPerPlayer; i++) {
       const b = new THREE.Mesh(CARGO_GEO, CARGO_MAT);
-      b.position.y = i * ItemConfig.stackGap + ItemConfig.stackGap * 0.5;
+      b.position.y = (i * ItemConfig.stackGap + ItemConfig.stackGap * 0.5) * CARGO_S;
       b.visible = false;
       if (this.shadows) b.castShadow = true;
       this.stack.add(b);

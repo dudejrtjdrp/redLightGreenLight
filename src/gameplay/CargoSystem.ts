@@ -137,7 +137,7 @@ export class CargoSystem {
     gameBus.emit("item:dropped", {
       itemId: item.id,
       byMoverId: mover.id,
-      to: { x: landing.x, y: ItemConfig.visualSize * 0.7, z: landing.z },
+      to: { x: landing.x, y: ItemConfig.visualSize * 0.7 * ItemConfig.visualScale, z: landing.z },
     });
   }
 

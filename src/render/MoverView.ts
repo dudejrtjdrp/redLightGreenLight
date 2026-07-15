@@ -33,9 +33,9 @@ const G = {
   hand: new THREE.SphereGeometry(0.1, 8, 6),
   foot: new THREE.BoxGeometry(0.16, 0.08, 0.26),
   cargo: new THREE.BoxGeometry(
-    ItemConfig.visualSize * 2,
-    ItemConfig.stackGap * 0.9,
-    ItemConfig.visualSize * 2,
+    ItemConfig.visualSize * 2 * ItemConfig.visualScale,
+    ItemConfig.stackGap * 0.9 * ItemConfig.visualScale,
+    ItemConfig.visualSize * 2 * ItemConfig.visualScale,
   ),
 };
 const MAT_CARGO = new THREE.MeshStandardMaterial({ color: 0xffcc44, roughness: 0.7 });
@@ -117,7 +117,8 @@ export class MoverView {
     this.bodyPivot.add(this.stack);
     for (let i = 0; i < ItemConfig.maxPerPlayer; i++) {
       const b = new THREE.Mesh(G.cargo, MAT_CARGO);
-      b.position.y = i * ItemConfig.stackGap + ItemConfig.stackGap * 0.5;
+      b.position.y =
+        (i * ItemConfig.stackGap + ItemConfig.stackGap * 0.5) * ItemConfig.visualScale;
       b.visible = false;
       this.setShadow(b);
       this.stack.add(b);

@@ -15,10 +15,11 @@ export class DroppedItemsView {
 
   constructor(private readonly cargo: CargoSystem) {
     this.group = new THREE.Group();
+    const s = ItemConfig.visualScale;
     const geo = new THREE.BoxGeometry(
-      ItemConfig.visualSize * 2,
-      ItemConfig.visualSize * 1.4,
-      ItemConfig.visualSize * 2,
+      ItemConfig.visualSize * 2 * s,
+      ItemConfig.visualSize * 1.4 * s,
+      ItemConfig.visualSize * 2 * s,
     );
     const mat = new THREE.MeshStandardMaterial({
       color: 0xbb8822,
@@ -42,7 +43,7 @@ export class DroppedItemsView {
         m.visible = true;
         m.position.set(
           item.position.x,
-          ItemConfig.visualSize * 0.7,
+          ItemConfig.visualSize * 0.7 * ItemConfig.visualScale,
           item.position.z,
         );
       } else if (m.visible) {

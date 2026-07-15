@@ -28,6 +28,9 @@ export const ItemConfig = {
 
   /** 짐이 쌓일 때 세로 간격 (등에 쌓는 스택 시각화용) */
   stackGap: 0.24,
+
+  /** 짐 시각 스케일 배율(캐릭터 대비 잘 보이게). 박스 크기 + 스택 간격에 함께 적용. */
+  visualScale: 1.28,
 } as const;
 
 export type ItemConfigType = typeof ItemConfig;
