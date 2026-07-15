@@ -61,7 +61,6 @@ export class CharacterView {
 
   private readonly curEmissive: THREE.Color;
   private readonly targetEmissive: THREE.Color;
-  private phase: RoundPhase = RoundPhase.GREEN;
   private readonly shadows: boolean;
 
   /** 로드 + 구성. 실패하면 null(폴백). */
@@ -193,7 +192,6 @@ export class CharacterView {
   }
 
   setPhase(phase: RoundPhase): void {
-    this.phase = phase;
     const h = VisualConfig.humanoid;
     const danger = phase === RoundPhase.TELL || phase === RoundPhase.RED;
     this.targetEmissive.setHex(danger ? h.emissiveRed : h.emissiveGreen);
