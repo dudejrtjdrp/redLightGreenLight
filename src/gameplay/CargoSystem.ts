@@ -88,15 +88,19 @@ export class CargoSystem {
     const cargoBefore = mover.cargo;
     const seekerBefore = this.seeker.score;
 
-    // 넘어가는 방향으로 바깥에 착지. 캐릭터 그룹은 rotation.y=π라 월드 x가 뒤집히므로
-    // 시각적으로 기울어진 세계 방향은 -sign(tilt). 착지도 그 방향으로.
-    const worldDir =
-      mover.tilt > 0.001 ? -1 : mover.tilt < -0.001 ? 1 : Math.random() < 0.5 ? -1 : 1;
+    // 낙하 방향 = 쏠린 방향(sign(tilt)). 몸 lean·스택 shear와 동일 부호축(월드 +x = tilt>0=오른쪽).
+    // (MoverView shear에 -부호를 줘 로컬↔월드 뒤집힘을 이미 통일했으므로 여기선 +sign(tilt) 그대로.)
+    const launchDir =
+      mover.tilt > 0.001 ? 1 : mover.tilt < -0.001 ? -1 : Math.random() < 0.5 ? -1 : 1;
     const spread = BalanceConfig.dropLandingSpread;
     const landing = {
-      x: mover.position.x + worldDir * spread,
+      x: mover.position.x + launchDir * spread,
       z: mover.position.z - 0.3, // 스택이 얹힌 앞쪽(월드 -z) 근처
     };
+    // [검증] 쏠린 방향과 낙하 방향 일치 확인.
+    console.log(
+      `[DROP-DIR] tilt ${mover.tilt.toFixed(2)} → 낙하 ${launchDir > 0 ? "오른쪽(+x)" : "왼쪽(-x)"}`,
+    );
 
     // 착지 좌표를 낙하 위치로 설정(회수는 여기서). 단 pending 동안은 미노출/미회수.
     this.pool.setDropped(item, landing);

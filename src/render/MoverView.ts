@@ -307,7 +307,9 @@ export class MoverView {
     const topIdx = this.mover.cargo - 1; // 맨 위 짐
     for (let i = 0; i < this.boxes.length; i++) {
       this.boxes[i].visible = i < this.mover.cargo;
-      let ox = this.visTilt * st.shearPerLevel * i;
+      // 그룹 rotation.y=π로 로컬 x가 월드에서 뒤집히므로, 로컬 shear에 -부호를 줘서
+      // 월드 기준 tilt>0 → +x(오른쪽)로 몸 lean·낙하 방향과 동일 부호축을 쓰게 한다.
+      let ox = -this.visTilt * st.shearPerLevel * i;
       if (ox > st.maxShear) ox = st.maxShear;
       else if (ox < -st.maxShear) ox = -st.maxShear;
       // 아슬아슬: 맨 위 짐은 가장자리에서 미세하게 wobble(떨어질랑말랑).
