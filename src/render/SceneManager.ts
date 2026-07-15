@@ -9,6 +9,7 @@
  */
 
 import * as THREE from "three";
+import { GameBalance } from "../config/GameBalance";
 
 export class SceneManager {
   readonly scene: THREE.Scene;
@@ -71,13 +72,26 @@ export class SceneManager {
     dir.position.set(5, 12, 6);
     this.scene.add(dir);
 
-    // 씬이 살아있다는 확인용 기준 큐브 (Phase 2에서 무버로 교체 예정)
-    const marker = new THREE.Mesh(
-      new THREE.BoxGeometry(0.8, 0.8, 0.8),
-      new THREE.MeshStandardMaterial({ color: 0x9fe870, roughness: 0.6 }),
+    // 완주선(도착 지점) 표시
+    const finishZ = GameBalance.track.startZ - GameBalance.track.length;
+    const finish = new THREE.Mesh(
+      new THREE.BoxGeometry(GameBalance.track.laneHalfWidth * 2 + 1, 0.05, 0.4),
+      new THREE.MeshStandardMaterial({
+        color: 0x9fe870,
+        emissive: 0x2f5a20,
+        roughness: 0.5,
+      }),
     );
-    marker.position.set(0, 0.4, 0);
-    this.scene.add(marker);
+    finish.position.set(0, 0.03, finishZ);
+    this.scene.add(finish);
+
+    // 시작선 표시
+    const start = new THREE.Mesh(
+      new THREE.BoxGeometry(GameBalance.track.laneHalfWidth * 2 + 1, 0.05, 0.3),
+      new THREE.MeshStandardMaterial({ color: 0x3b4b66, roughness: 0.8 }),
+    );
+    start.position.set(0, 0.03, GameBalance.track.startZ);
+    this.scene.add(start);
   }
 
   /** GameLoop.render(alpha)에서 호출. Phase 1은 alpha 미사용(정적 씬). */
