@@ -4,7 +4,8 @@
  * Phase 1: 씬 + 고정 timestep 루프 + 리사이즈 + 최소 HUD.
  * Phase 2: 라운드 상태머신 + 게임플레이 데이터 모델(무버/술래/짐).
  * Phase 3: 입력 + 무버 이동(fake physics) + 레드라이트 즉시 탈락 + 완주 판정.
- *          렌더는 아직 데이터 미반영(무버 큐브 위치는 Phase 4에서). 규칙 동작을 HUD/콘솔로 검증.
+ * Phase 4: 급정지 짐 낙하 + 트랙 잔류 + 회수 + 점수 귀속(자해 구조 검증).
+ *          렌더 반영은 아직(무버/짐 시각화는 이후). 규칙 동작을 HUD/콘솔로 검증.
  */
 
 import { GameLoop } from "./core/GameLoop";
@@ -15,10 +16,10 @@ import { RoundStateMachine } from "./gameplay/RoundStateMachine";
 import { RoundPhase, RoundPhaseName } from "./gameplay/RoundState";
 import { createMover, MoverStatus, SpeedMode } from "./gameplay/Mover";
 import { createSeeker } from "./gameplay/Seeker";
-import { ItemPool } from "./gameplay/Item";
 import { vec2 } from "./gameplay/types";
 import { InputController } from "./input/InputController";
 import { PlayerSystem } from "./gameplay/PlayerSystem";
+import { CargoSystem } from "./gameplay/CargoSystem";
 // emit 지점 헬퍼/EventMap 선언 병합 로드 보장.
 import "./gameplay/GameplayEvents";
 
@@ -31,13 +32,14 @@ const scene = new SceneManager(container);
 // --- 게임플레이 데이터 ---
 const seeker = createSeeker(0);
 const player = createMover(1, vec2(0, 0));
-const itemPool = new ItemPool(player.cargo);
-for (let i = 0; i < player.cargo; i++) itemPool.acquireOwned(player.id);
 
 // --- 시스템 ---
 const round = new RoundStateMachine();
 const input = new InputController();
-const playerSystem = new PlayerSystem(player, input, round);
+const cargo = new CargoSystem(seeker, player.cargo + 4);
+cargo.spawnInitial(player); // 시작 짐 5개를 풀에서 대여해 소유로 부여
+const playerSystem = new PlayerSystem(player, input, round, cargo);
+const movers = [player] as const;
 
 // --- 이벤트 구독(로그) ---
 gameBus.on("phase:change", ({ from, to }) => {
@@ -48,6 +50,10 @@ gameBus.on("mover:caught", ({ moverId }) => {
 });
 gameBus.on("mover:finished", ({ moverId, cargoDelivered }) => {
   console.log(`[FINISH] mover ${moverId} 완주, 짐 ${cargoDelivered}개 반입`);
+});
+// item:dropped 상세 로그는 CargoSystem이 자해 구조 검증과 함께 출력(중복 방지 위해 여기선 요약만).
+gameBus.on("item:dropped", ({ itemId, byMoverId }) => {
+  console.log(`[EVENT] item:dropped #${itemId} by mover ${byMoverId}`);
 });
 
 // --- HUD 계측 ---
@@ -62,6 +68,7 @@ const loop = new GameLoop(
       // 순서 주의: 플레이어를 먼저 갱신해 이번 프레임 RED 활동을
       // 상태머신이 RED→RESOLVE로 넘어가기 전에 반영(빈 턴 반환 정확도).
       playerSystem.update(dt);
+      cargo.updateRecovery(movers); // 반경 기반 회수(뒤 무버만)
       round.update(dt);
       gameBus.emit("loop:update", { dt });
     },
@@ -82,13 +89,14 @@ if (hud) {
     const holding = input.isForward ? "전진" : "정지";
     const speed = Math.abs(player.velocity.z).toFixed(2);
     hud.textContent =
-      `무궁화 밸런스 게임 — Phase 3 (Gameplay)\n` +
+      `무궁화 밸런스 게임 — Phase 4 (Cargo/Drop/Recover)\n` +
       `[조작] 전진: Space/W/↑ (hold)  |  모드토글: Shift/E\n` +
-      `phase: ${RoundPhaseName[round.phase]} (${round.phase})\n` +
-      `round: ${round.elapsedRound.toFixed(1)}s\n` +
+      `phase: ${RoundPhaseName[round.phase]} (${round.phase})   round: ${round.elapsedRound.toFixed(1)}s\n` +
       `mode: ${mode}  input: ${holding}  speed: ${speed}\n` +
       `progress: ${(playerSystem.progress * 100).toFixed(0)}%  status: ${player.status}\n` +
-      `cargo: ${player.cargo} | items: ${itemPool.activeCount} | fps: ${fps}`;
+      `내 짐: ${player.cargo}  |  트랙 낙하물: ${cargo.droppedCount}\n` +
+      `술래 점수: ${seeker.score} (낙하수확 ${seeker.droppedCargoClaimed}, 잡음 ${seeker.catches})\n` +
+      `fps: ${fps}`;
   }, 250);
 }
 
@@ -114,7 +122,7 @@ round.start();
   MoverStatus,
   seeker,
   player,
-  itemPool,
+  cargo,
   input,
   playerSystem,
 };

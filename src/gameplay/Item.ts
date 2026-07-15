@@ -23,6 +23,10 @@ export interface Item {
   ownerId: number | null;
   /** DROPPED일 때 트랙 위 위치, OWNED면 null(무버 위치를 따름) */
   position: Vec2 | null;
+  /** 이 짐을 마지막으로 떨어뜨린 무버 id. 회수 게이트(자기 낙하물 재흡수 방지)에 사용. */
+  dropperId: number | null;
+  /** 술래가 이 짐으로 가점 받은 누적 횟수. double-dip faucet 상한 판정용. */
+  harvestCount: number;
   /** 풀에서 대여 중(활성) 여부 */
   active: boolean;
 }
@@ -49,6 +53,8 @@ export class ItemPool {
       state: ItemState.OWNED,
       ownerId: null,
       position: null,
+      dropperId: null,
+      harvestCount: 0,
       active: false,
     };
   }
@@ -57,6 +63,8 @@ export class ItemPool {
     item.state = ItemState.OWNED;
     item.ownerId = null;
     item.position = null;
+    item.dropperId = null;
+    item.harvestCount = 0; // 풀 반환 시에만 재수확 카운터 초기화(회수로는 유지)
     item.active = false;
   }
 
@@ -67,6 +75,7 @@ export class ItemPool {
     item.state = ItemState.OWNED;
     item.ownerId = ownerId;
     item.position = null;
+    item.dropperId = null;
     item.active = true;
     return item;
   }
