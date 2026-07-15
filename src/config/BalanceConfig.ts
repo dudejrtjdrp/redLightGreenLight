@@ -108,7 +108,7 @@ export const BalanceConfig: BalanceConfigShape = {
   walkSwayStepCoupling: 1.0,
   walkStride: 0.9,
 
-  instabilityGain: 2.2, // inverted-pendulum 증폭(쏠림 체감) 약간 상향
+  instabilityGain: 3.4, // inverted-pendulum 증폭 상향(기운 뒤 더 급하게 커짐)
   instabilityNoise: 0.3, // 지터 감소
   damping: 2.0,
   stackHeightSensitivity: 0.3,
@@ -119,14 +119,14 @@ export const BalanceConfig: BalanceConfigShape = {
   settleAssist: 1.0, // 스프링 복원 하향(진동 감소)
   centerDeadzone: 0.06,
 
-  leanDriftGain: 8.0, // 주력: 지속 방향 쏠림(가만히 직진하면 ~1초 내 눈에 띄게 쏠려 위험)
+  leanDriftGain: 14.0, // 주력: 지속 방향 쏠림(가만히 직진하면 ~0.5초 내 확 기울 정도)
   leanDirChangeRate: 0.5, // 방향은 서서히 전환(저주파)
   driftMax: 1.0,
-  speedLeanScale: 0.8,
-  finishLeanScale: 1.0,
+  speedLeanScale: 1.1, // 빠를수록 특히 더 크게
+  finishLeanScale: 1.4, // 종반에 특히 더 크게
 
-  maxTilt: 2.5,
-  maxTiltVel: 8.0,
+  maxTilt: 3.2, // 최대 쏠림 폭 확대(더 큰 각까지 도달; danger/drop 임계는 그대로)
+  maxTiltVel: 11.0, // 더 빠른 쏠림 속도 허용
 
   warningMax: 3,
   warningCooldown: 0.35,
