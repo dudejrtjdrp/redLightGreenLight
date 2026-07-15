@@ -5,6 +5,7 @@
  * 모든 뷰는 사전생성 + 풀링. 이 클래스에서 매 프레임 new 없음.
  */
 
+import * as THREE from "three";
 import { SceneManager } from "./SceneManager";
 import { MoverView } from "./MoverView";
 import { SeekerView } from "./SeekerView";
@@ -27,6 +28,8 @@ export class GameRenderer {
   // 스크린셰이크 상태
   private shakeEnergy = 0;
   private shakeTime = 0;
+  /** 낙하 아크 시작점 계산용 재사용 벡터(할당 방지). */
+  private readonly scratch = new THREE.Vector3();
 
   constructor(
     private readonly sceneManager: SceneManager,
@@ -49,10 +52,14 @@ export class GameRenderer {
       this.seekerView.setPhase(to);
       this.moverView.setPhase(to);
     });
-    // 낙하 주스: 카멜레온 움찔 + 스크린셰이크. (스택 기울기는 tilt가 소스이므로 별도 흔들림 없음)
-    gameBus.on("item:dropped", () => {
+    // 낙하 주스: 움찔 + 스크린셰이크 + 아크 연출.
+    // 아크 시작점(from)은 방금 분리된 맨 위 짐의 "실제 월드 좌표"(팝인 방지).
+    // 분리 후 mover.cargo는 이미 -1 → 그 값이 곧 떨어진 박스의 인덱스.
+    gameBus.on("item:dropped", (payload) => {
       this.moverView.addFlinch(ArtConfig.flinch.dropImpulse);
       this.addScreenShake(ArtConfig.screenShake.dropEnergy);
+      const from = this.moverView.getBoxWorldPosition(this.player.cargo, this.scratch);
+      this.effects.spawn(from, payload.to);
     });
     // 탈락 주스: 스크린셰이크(카멜레온 굳음/눈 뱅글은 MoverView가 status로 처리).
     gameBus.on("mover:caught", () =>

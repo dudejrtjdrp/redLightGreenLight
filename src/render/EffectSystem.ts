@@ -1,16 +1,19 @@
 /**
  * EffectSystem.ts
- * 낙하 아크 연출: 짐이 손/스택(from)에서 이탈해 포물선으로 착지(to)까지 날아가는 애니메이션.
- * item:dropped(분리 시점)마다 풀에서 조각 하나 acquire, 착지(t≥1) 시 release.
- * 매 프레임 new 없음(GC 압박 방지). 착지 타이밍은 CargoSystem의 회수 전환과 duration 공유.
+ * 낙하 아크 연출: 짐이 손/스택(from, 실제 top-box 월드좌표)에서 이탈해
+ * 포물선으로 착지(to)까지 날아가는 애니메이션. GameRenderer가 spawn()으로 구동한다.
+ * 착지(t≥1) 시 Pool 반환. 매 프레임 new 없음. 착지 타이밍은 CargoSystem 회수 전환과 duration 공유.
  */
 
 import * as THREE from "three";
 import { ObjectPool } from "../core/ObjectPool";
-import { gameBus } from "../core/EventBus";
 import { EffectConfig } from "../config/EffectConfig";
-// EventMap 선언 병합 로드 보장(item:dropped 타입).
-import "../gameplay/GameplayEvents";
+
+interface Vec3Like {
+  x: number;
+  y: number;
+  z: number;
+}
 
 interface Flight {
   mesh: THREE.Mesh;
@@ -47,28 +50,24 @@ export class EffectSystem {
       },
       e.poolSize,
     );
-
-    gameBus.on("item:dropped", this.onDropped);
   }
 
-  private readonly onDropped = (payload: {
-    from: { x: number; y: number; z: number };
-    to: { x: number; y: number; z: number };
-  }): void => {
+  /** 낙하 아크 시작: from(실제 이탈 월드좌표) → to(착지). GameRenderer가 호출. */
+  spawn(from: Vec3Like, to: Vec3Like): void {
     const f = this.pool.acquire();
     f.t = 0;
     f.dur = EffectConfig.dropFlight.duration;
-    f.fx = payload.from.x;
-    f.fy = payload.from.y;
-    f.fz = payload.from.z;
-    f.tx = payload.to.x;
-    f.ty = payload.to.y;
-    f.tz = payload.to.z;
+    f.fx = from.x;
+    f.fy = from.y;
+    f.fz = from.z;
+    f.tx = to.x;
+    f.ty = to.y;
+    f.tz = to.z;
     f.mesh.visible = true;
     f.mesh.position.set(f.fx, f.fy, f.fz);
     f.mesh.rotation.set(0, 0, 0);
     this.active.push(f);
-  };
+  }
 
   update(dt: number): void {
     const arc = EffectConfig.dropFlight.arcHeight;
@@ -94,6 +93,6 @@ export class EffectSystem {
   }
 
   dispose(): void {
-    gameBus.off("item:dropped", this.onDropped);
+    this.active.length = 0;
   }
 }

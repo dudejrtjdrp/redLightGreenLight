@@ -179,6 +179,15 @@ export class MoverView {
     if (this.shadows) m.castShadow = true;
   }
 
+  /**
+   * 특정 스택 짐의 현재 월드 좌표(낙하 아크 시작점). 실제 렌더 위치(손높이+스택+전단) 반영.
+   * out에 담아 반환(호출측 재사용 벡터 → 할당 방지).
+   */
+  getBoxWorldPosition(index: number, out: THREE.Vector3): THREE.Vector3 {
+    const i = Math.max(0, Math.min(this.boxes.length - 1, index));
+    return this.boxes[i].getWorldPosition(out);
+  }
+
   setPhase(phase: RoundPhase): void {
     this.phase = phase;
     const h = VisualConfig.humanoid;
@@ -247,19 +256,26 @@ export class MoverView {
     this.bodyMat.emissiveIntensity =
       this.mover.speedMode === SpeedMode.FAST && !caught ? 1.1 : 0.85;
 
-    // --- 다리 스윙 ---
+    const braceAmt = 1 - this.gait; // 정지에 가까울수록 1
+
+    // --- 다리 스윙(이동) + 벌림(브레이스) ---
     const sw = Math.sin(this.walkPhase);
     const sw2 = Math.sin(this.walkPhase + Math.PI);
     this.legs[0].hip.rotation.x = sw * w.legSwing * this.gait;
     this.legs[1].hip.rotation.x = sw2 * w.legSwing * this.gait;
     this.legs[0].knee.rotation.x = Math.max(0, -sw) * w.kneeBend * this.gait;
     this.legs[1].knee.rotation.x = Math.max(0, -sw2) * w.kneeBend * this.gait;
+    // 브레이스: 다리를 벌려 안정된 자세.
+    this.legs[0].hip.rotation.z = w.braceSplay * braceAmt;
+    this.legs[1].hip.rotation.z = -w.braceSplay * braceAmt;
 
-    // --- 상체 바운스 + sway + 무게중심(tilt) lean ---
+    // --- 상체 바운스 + sway + lean(이동=무게중심 / 정지=카운터-린 브레이스) ---
     const bounce = Math.abs(Math.sin(this.walkPhase)) * w.bounce * this.gait;
     const sway = Math.sin(this.walkPhase) * w.sway * this.gait;
-    let lean = this.mover.tilt * VisualConfig.balance.leanScale;
-    const ml = VisualConfig.balance.maxLean;
+    const bal = VisualConfig.balance;
+    let lean =
+      this.mover.tilt * (bal.leanScale * this.gait - bal.braceLeanScale * braceAmt);
+    const ml = bal.maxLean;
     if (lean > ml) lean = ml;
     else if (lean < -ml) lean = -ml;
     const brace = this.phase === RoundPhase.RED && this.gait < 0.5 ? w.braceCrouch : 0;

@@ -88,11 +88,15 @@ export class CargoSystem {
     const cargoBefore = mover.cargo;
     const seekerBefore = this.seeker.score;
 
-    // 넘어가는 방향(tilt 부호)으로 바깥에 착지.
-    const dir =
-      mover.tilt > 0.001 ? 1 : mover.tilt < -0.001 ? -1 : Math.random() < 0.5 ? -1 : 1;
+    // 넘어가는 방향으로 바깥에 착지. 캐릭터 그룹은 rotation.y=π라 월드 x가 뒤집히므로
+    // 시각적으로 기울어진 세계 방향은 -sign(tilt). 착지도 그 방향으로.
+    const worldDir =
+      mover.tilt > 0.001 ? -1 : mover.tilt < -0.001 ? 1 : Math.random() < 0.5 ? -1 : 1;
     const spread = BalanceConfig.dropLandingSpread;
-    const landing = { x: mover.position.x + dir * spread, z: mover.position.z };
+    const landing = {
+      x: mover.position.x + worldDir * spread,
+      z: mover.position.z - 0.3, // 스택이 얹힌 앞쪽(월드 -z) 근처
+    };
 
     // 착지 좌표를 낙하 위치로 설정(회수는 여기서). 단 pending 동안은 미노출/미회수.
     this.pool.setDropped(item, landing);
@@ -121,14 +125,14 @@ export class CargoSystem {
         `swing ${swing}점 | harvest ${item.harvestCount}/${ItemConfig.maxSeekerHarvestPerItem}`,
     );
 
-    // 비행 대기열에 등록(착지 후 회수 가능). onItemDropped는 분리 시점에 emit(from→to 포함).
+    // 비행 대기열에 등록(착지 후 회수 가능). onItemDropped는 분리 시점에 emit.
+    // 아크 시작점(from)은 렌더 레이어(GameRenderer)가 실제 top-box 월드좌표로 채움 →
+    // 여기선 착지점(to)만 전달. (허공/밑동 스폰 금지, 팝인 없음)
     const dur = EffectConfig.dropFlight.duration;
     this.pending.push({ item, timer: dur });
     gameBus.emit("item:dropped", {
       itemId: item.id,
       byMoverId: mover.id,
-      position: { x: landing.x, z: landing.z },
-      from: { x: mover.position.x + dir * 0.18, y: 1.15, z: mover.position.z - 0.34 },
       to: { x: landing.x, y: ItemConfig.visualSize * 0.7, z: landing.z },
     });
   }

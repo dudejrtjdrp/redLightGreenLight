@@ -17,10 +17,9 @@
 
 import { gameBus } from "../core/EventBus";
 import { Mover, MoverStatus } from "./Mover";
-import { Vec2 } from "./types";
 import { RoundPhase } from "./RoundState";
 
-/** 3D 좌표(낙하 아크 from/to용). */
+/** 3D 좌표(낙하 아크 착지점용). */
 interface Vec3 {
   x: number;
   y: number;
@@ -33,14 +32,12 @@ declare module "../core/EventBus" {
     /** 라운드 페이즈 전환 */
     "phase:change": { from: RoundPhase; to: RoundPhase };
     /**
-     * 짐 낙하(분리 시점 emit). position=착지(회수) 좌표.
-     * from=손/스택 이탈 지점, to=착지 지점(비행 아크 연출용).
+     * 짐 낙하(분리 시점 emit). to=착지(회수) 좌표.
+     * 아크 시작점(from)은 렌더 레이어가 실제 top-box 월드좌표로 계산(팝인 방지).
      */
     "item:dropped": {
       itemId: number;
       byMoverId: number;
-      position: Vec2;
-      from: Vec3;
       to: Vec3;
     };
     /** 무버 체포: 레드 때 전진 이동 또는 경고 누적 초과로 탈락 */

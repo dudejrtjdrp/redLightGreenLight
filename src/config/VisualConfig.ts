@@ -37,12 +37,17 @@ export const VisualConfig = {
     gaitLerp: 8,
     /** RED에서 정지 시 살짝 웅크리는 brace 하강(유닛). */
     braceCrouch: 0.05,
+    /** 정지(브레이스) 시 다리 벌림 각(rad). */
+    braceSplay: 0.35,
   },
 
   /** A/D 균형 → 몸통 좌우 무게중심 이동(tilt 소스). */
   balance: {
+    /** 이동 중: tilt 방향으로 무게중심 이동(weight shift). */
     leanScale: 0.22,
     maxLean: 0.5,
+    /** 정지 브레이스: tilt 반대로 카운터-린(스택을 되잡는 자세). */
+    braceLeanScale: 0.3,
   },
 
   /** 아슬아슬(danger) 위험 연출: 맨 위 짐 wobble + 몸 붉은 강조. 낙하 X, 예고만. */

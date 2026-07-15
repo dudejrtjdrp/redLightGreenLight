@@ -29,6 +29,14 @@ export interface BalanceConfigShape {
   /** 낙하 짐이 바깥으로 밀려나 착지하는 수평 거리(회수 위치 = 착지점). */
   dropLandingSpread: number;
 
+  /** 정지 시 스택을 중심(tilt=0)으로 되돌리는 강한 능동 복원력(브레이스). */
+  braceRestoreGain: number;
+  /**
+   * 이동량(정규화 전진속도) → 불안정/드리프트 계수.
+   * 멈추면 불안정≈0, 움직일 때만 흔들리게. (activity = min(1, moveFactor*이 값))
+   */
+  moveInstabilityScale: number;
+
   /** 불안정 양성 피드백 계수(안 잡으면 쏠려 넘어감). */
   instabilityGain: number;
   /** 미세 흔들림 노이즈(완전 정지 상태에서도 서서히 쏠리게). */
@@ -80,6 +88,9 @@ export const BalanceConfig: BalanceConfigShape = {
   tiltDropStep: 0.5,
   tiltReliefFactor: 0.45,
   dropLandingSpread: 0.8,
+
+  braceRestoreGain: 8.0,
+  moveInstabilityScale: 1.6,
 
   instabilityGain: 2.0,
   instabilityNoise: 0.5,

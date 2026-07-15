@@ -15,6 +15,7 @@
 
 import { GameBalance } from "../config/GameBalance";
 import { BalanceConfig } from "../config/BalanceConfig";
+import { PlayerConfig } from "../config/PlayerConfig";
 import { Mover, MoverStatus } from "./Mover";
 import { RoundStateMachine } from "./RoundStateMachine";
 import { RoundPhase } from "./RoundState";
@@ -90,8 +91,13 @@ export class PlayerSystem {
       applySettleAssist(this.mover, dt);
     }
 
-    // --- 불안정성 적분(안 잡으면 쏠림, 직진 중에도 드리프트) ---
-    integrateTilt(this.mover, dt);
+    // --- 불안정성 적분(이동 비례, 정지 시 브레이스 복원) ---
+    // 정규화 전진속도(0=정지 → 브레이스로 안정, 1=최대 → 최대 불안정).
+    const moveFactor = Math.min(
+      1,
+      Math.abs(this.mover.velocity.z) / PlayerConfig.baseMoveSpeed,
+    );
+    integrateTilt(this.mover, dt, moveFactor);
     // 아슬아슬(danger) 상태 갱신(히스테리시스). 낙하는 이보다 큰 tiltDropThreshold에서만.
     updateDangerState(this.mover);
 

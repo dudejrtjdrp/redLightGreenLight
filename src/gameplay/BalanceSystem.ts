@@ -19,8 +19,12 @@ export function stackHeightFactor(cargo: number): number {
   return 1 + BalanceConfig.stackHeightSensitivity * cargo;
 }
 
-/** 매 프레임 불안정성 적분(양성 피드백 + 드리프트 + 노이즈 + 감쇠). 짐 없으면 안정. */
-export function integrateTilt(mover: Mover, dt: number): void {
+/**
+ * 매 프레임 불안정성 적분. 짐 없으면 안정.
+ * @param moveFactor 정규화 전진속도(0=정지, 1=최대). 불안정/드리프트는 이동량에 비례,
+ *                   정지 시엔 브레이스 복원력이 스택을 중심으로 되돌린다.
+ */
+export function integrateTilt(mover: Mover, dt: number, moveFactor: number): void {
   if (mover.cargo <= 0) {
     mover.tilt = 0;
     mover.tiltVel = 0;
@@ -30,21 +34,31 @@ export function integrateTilt(mover: Mover, dt: number): void {
   }
   const hf = stackHeightFactor(mover.cargo);
 
-  // 상시 드리프트: 방향이 서서히 바뀌는 random-walk 바이어스(직진해도 쏠림).
+  // 이동량 → 활동도(activity). 멈추면 0, 조금만 움직여도 빠르게 1로.
+  const activity = Math.min(
+    1,
+    Math.max(0, moveFactor) * BalanceConfig.moveInstabilityScale,
+  );
+  const braceAmt = 1 - activity; // 정지에 가까울수록 1
+
+  // 상시 드리프트(random-walk). 효과는 activity로 게이팅(멈추면 무효).
   mover.driftBias +=
     (Math.random() * 2 - 1) * BalanceConfig.driftNoiseScale * dt;
   if (mover.driftBias > BalanceConfig.driftMax) mover.driftBias = BalanceConfig.driftMax;
   else if (mover.driftBias < -BalanceConfig.driftMax) mover.driftBias = -BalanceConfig.driftMax;
 
-  // 양성 피드백 + 드리프트 주입.
-  mover.tiltVel += BalanceConfig.instabilityGain * mover.tilt * hf * dt;
-  mover.tiltVel += BalanceConfig.straightDriftGain * mover.driftBias * dt;
+  // 양성 피드백 + 드리프트(이동 비례).
+  mover.tiltVel += BalanceConfig.instabilityGain * mover.tilt * hf * activity * dt;
+  mover.tiltVel += BalanceConfig.straightDriftGain * mover.driftBias * activity * dt;
 
-  // 미세 노이즈는 데드존 밖에서만(중심 근처 떨림 제거).
+  // 미세 노이즈: 데드존 밖 + 이동 중에만.
   if (Math.abs(mover.tilt) >= BalanceConfig.centerDeadzone) {
     mover.tiltVel +=
-      (Math.random() * 2 - 1) * BalanceConfig.instabilityNoise * dt;
+      (Math.random() * 2 - 1) * BalanceConfig.instabilityNoise * activity * dt;
   }
+
+  // 정지 브레이스: tilt를 중심으로 강하게 되돌림(멈추면 능동적으로 균형 회복).
+  mover.tiltVel -= BalanceConfig.braceRestoreGain * mover.tilt * braceAmt * dt;
 
   // 감쇠(마찰). danger 구간에선 추가 감쇠로 가장자리에 머물게("어어어").
   const damp = mover.inDanger
