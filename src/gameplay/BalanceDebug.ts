@@ -46,9 +46,10 @@ export interface BalanceScenario {
 }
 
 /**
- * 정합성 자체 체크: 프롬프트의 8인 예시를 현재 Config로 시뮬레이션해 콘솔 출력.
- * 목표값: 술래 ≈ 16점, 1등 무버 ≈ 11점 (기본 Config에서 성립).
- * K / dropPointScale / catchBonusScale / 짐상한을 바꾸면 이 함수 출력이 즉시 반영됨.
+ * 정합성 자체 체크: 프롬프트의 8인 시나리오를 현재 Config로 시뮬레이션해 콘솔 출력.
+ * 원본 예시(튜닝 전)는 술래 16 / 1등무버 11 이었고,
+ * Phase 7 튜닝(K 28, dropPointScale 0.6) 후 북극성(술래 ≈ 1등무버)에 맞춰 ≈ 12 / 12로 수렴.
+ * K / dropPointScale / catchBonusScale를 바꾸면 이 함수 출력이 즉시 반영됨(짐상한 5는 확정 규칙).
  */
 export function simulateReference(
   scenario?: Partial<BalanceScenario>,
@@ -71,14 +72,14 @@ export function simulateReference(
   );
   console.log(
     `  술래 = 낙하 ${sc.seekerDrops}×${GameBalance.score.dropPointScale}` +
-      ` + 잡기보너스(${sc.seekerCatches}→${catchBonusOf(sc.seekerCatches)}) = ${seeker.toFixed(1)}점  (목표 ≈16)`,
+      ` + 잡기보너스(${sc.seekerCatches}→${catchBonusOf(sc.seekerCatches)}) = ${seeker.toFixed(1)}점`,
   );
   console.log(
     `  1등무버 = 반입 ${sc.topMoverDelivered}×${GameBalance.score.cargoPoint}` +
-      ` + 생존보너스(K ${GameBalance.score.survivorBonusK}/${survivors}=${(GameBalance.score.survivorBonusK / survivors).toFixed(1)}) = ${topMover.toFixed(1)}점  (목표 ≈11)`,
+      ` + 생존보너스(K ${GameBalance.score.survivorBonusK}/${survivors}=${(GameBalance.score.survivorBonusK / survivors).toFixed(1)}) = ${topMover.toFixed(1)}점`,
   );
   console.log(
-    `  북극성 격차: |술래 ${seeker.toFixed(1)} − 1등무버 ${topMover.toFixed(1)}| = ${Math.abs(seeker - topMover).toFixed(1)} (작을수록 균형; K↑로 무버 보정)`,
+    `  북극성 격차: |술래 ${seeker.toFixed(1)} − 1등무버 ${topMover.toFixed(1)}| = ${Math.abs(seeker - topMover).toFixed(1)} (0에 가까울수록 균형)`,
   );
 
   return { seeker, topMover, survivors };
