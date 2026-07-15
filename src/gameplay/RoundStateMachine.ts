@@ -25,8 +25,12 @@ export class RoundStateMachine {
   private phaseDuration = Infinity;
   /** 라운드 전체 경과(초). 활성 페이즈에서만 누적. */
   private roundTime = 0;
-  /** 이번 라운드의 최대 지속시간(초). start 시 확정. */
+  /** 이번 라운드의 최대 지속시간(초). start 시 확정. 빈 턴 반환 시 연장됨. */
   private roundMax = 0;
+  /** 직전 진입한 RED의 지속시간(초). 빈 턴 반환 계산용. */
+  private redDuration = 0;
+  /** 현재 RED 동안 활동(이동/체포/낙하)이 있었는지. 빈 턴 판정용. */
+  private redHadActivity = false;
 
   constructor(private readonly rng: Rng = Math.random) {}
 
@@ -58,6 +62,15 @@ export class RoundStateMachine {
     this.setPhase(RoundPhase.END);
   }
 
+  /**
+   * RED 중 발생한 활동(무버 이동/체포/짐 낙하)을 상태머신에 통지.
+   * 빈 턴(뒤돌았는데 아무도 안 움직이고 낙하 0) 판정에 사용.
+   * RED가 아닐 때 호출은 무시.
+   */
+  registerActivity(): void {
+    if (this._phase === RoundPhase.RED) this.redHadActivity = true;
+  }
+
   /** 고정 스텝 갱신. GameLoop.update(dt)에서 호출. */
   update(dt: number): void {
     if (!this.isActive) return;
@@ -78,6 +91,9 @@ export class RoundStateMachine {
         this.setPhase(RoundPhase.RED);
         break;
       case RoundPhase.RED:
+        // 빈 턴 기회비용 반환(간단 버전): RED 동안 활동이 전혀 없었으면
+        // 술래가 헛돈 것이므로 그 RED 시간을 라운드 예산에 되돌려준다(그린타임 반환).
+        if (!this.redHadActivity) this.roundMax += this.redDuration;
         this.setPhase(RoundPhase.RESOLVE);
         break;
       case RoundPhase.RESOLVE:
@@ -99,6 +115,11 @@ export class RoundStateMachine {
     this._phase = next;
     this.phaseTime = 0;
     this.phaseDuration = this.durationFor(next);
+    if (next === RoundPhase.RED) {
+      // RED 진입: 활동 플래그 초기화 + 이번 RED 길이 기록(빈 턴 반환용).
+      this.redHadActivity = false;
+      this.redDuration = this.phaseDuration;
+    }
     gameBus.emit("phase:change", { from, to: next });
   }
 

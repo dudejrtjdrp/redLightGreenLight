@@ -2,8 +2,9 @@
  * main.ts
  * 진입점.
  * Phase 1: 씬 + 고정 timestep 루프 + 리사이즈 + 최소 HUD.
- * Phase 2: 라운드 상태머신 구동 + 게임플레이 데이터 모델(무버/술래/짐) 배선 검증.
- *          렌더/입력/판정 로직은 아직 없음(Phase 3+). 여기서는 "상태머신이 돈다"를 증명한다.
+ * Phase 2: 라운드 상태머신 + 게임플레이 데이터 모델(무버/술래/짐).
+ * Phase 3: 입력 + 무버 이동(fake physics) + 레드라이트 즉시 탈락 + 완주 판정.
+ *          렌더는 아직 데이터 미반영(무버 큐브 위치는 Phase 4에서). 규칙 동작을 HUD/콘솔로 검증.
  */
 
 import { GameLoop } from "./core/GameLoop";
@@ -12,11 +13,13 @@ import { SceneManager } from "./render/SceneManager";
 
 import { RoundStateMachine } from "./gameplay/RoundStateMachine";
 import { RoundPhase, RoundPhaseName } from "./gameplay/RoundState";
-import { createMover } from "./gameplay/Mover";
+import { createMover, MoverStatus, SpeedMode } from "./gameplay/Mover";
 import { createSeeker } from "./gameplay/Seeker";
 import { ItemPool } from "./gameplay/Item";
 import { vec2 } from "./gameplay/types";
-// emit 지점 헬퍼는 아직 호출하지 않지만, EventMap 선언 병합이 확실히 로드되도록 side-effect import.
+import { InputController } from "./input/InputController";
+import { PlayerSystem } from "./gameplay/PlayerSystem";
+// emit 지점 헬퍼/EventMap 선언 병합 로드 보장.
 import "./gameplay/GameplayEvents";
 
 const container = document.getElementById("app");
@@ -25,19 +28,26 @@ if (!container) throw new Error("#app container not found");
 
 const scene = new SceneManager(container);
 
-// --- Phase 2 게임플레이 데이터 (렌더 없음, 데이터 모델 배선 검증용) ---
+// --- 게임플레이 데이터 ---
 const seeker = createSeeker(0);
 const player = createMover(1, vec2(0, 0));
 const itemPool = new ItemPool(player.cargo);
-// 시작 짐 5개를 풀에서 대여해 플레이어 소유로 부여(생성/파괴 없이 재사용).
 for (let i = 0; i < player.cargo; i++) itemPool.acquireOwned(player.id);
 
-// --- 라운드 상태머신 ---
+// --- 시스템 ---
 const round = new RoundStateMachine();
+const input = new InputController();
+const playerSystem = new PlayerSystem(player, input, round);
 
-// phase:change 구독: 지금은 로그만(정산/판정은 이후 Phase의 emit 지점 헬퍼로 처리).
+// --- 이벤트 구독(로그) ---
 gameBus.on("phase:change", ({ from, to }) => {
   console.log(`[round] ${from} → ${to} @ ${round.elapsedRound.toFixed(1)}s`);
+});
+gameBus.on("mover:caught", ({ moverId }) => {
+  console.log(`[OUT] mover ${moverId} 레드 중 이동 → 탈락`);
+});
+gameBus.on("mover:finished", ({ moverId, cargoDelivered }) => {
+  console.log(`[FINISH] mover ${moverId} 완주, 짐 ${cargoDelivered}개 반입`);
 });
 
 // --- HUD 계측 ---
@@ -49,7 +59,10 @@ const loop = new GameLoop(
   {
     update: (dt: number) => {
       simSteps++;
-      round.update(dt); // 유일한 시뮬레이션 구동점. 불필요 tick 없음.
+      // 순서 주의: 플레이어를 먼저 갱신해 이번 프레임 RED 활동을
+      // 상태머신이 RED→RESOLVE로 넘어가기 전에 반영(빈 턴 반환 정확도).
+      playerSystem.update(dt);
+      round.update(dt);
       gameBus.emit("loop:update", { dt });
     },
     render: (alpha: number) => {
@@ -60,20 +73,23 @@ const loop = new GameLoop(
   { fixedStep: 1 / 60, maxFrameTime: 0.25 },
 );
 
-// HUD 갱신은 저빈도 타이머로(매프레임 DOM 갱신 회피).
 if (hud) {
   let lastFrames = 0;
   setInterval(() => {
     fps = frames - lastFrames;
     lastFrames = frames;
+    const mode = player.speedMode === SpeedMode.FAST ? "빠름(100%)" : "신중(50%)";
+    const holding = input.isForward ? "전진" : "정지";
+    const speed = Math.abs(player.velocity.z).toFixed(2);
     hud.textContent =
-      `무궁화 밸런스 게임 — Phase 2 (Core System)\n` +
+      `무궁화 밸런스 게임 — Phase 3 (Gameplay)\n` +
+      `[조작] 전진: Space/W/↑ (hold)  |  모드토글: Shift/E\n` +
       `phase: ${RoundPhaseName[round.phase]} (${round.phase})\n` +
       `round: ${round.elapsedRound.toFixed(1)}s\n` +
-      `mover cargo: ${player.cargo} | items active: ${itemPool.activeCount}\n` +
-      `seeker score: ${seeker.score}\n` +
-      `sim steps: ${simSteps} | fps: ${fps}`;
-  }, 500);
+      `mode: ${mode}  input: ${holding}  speed: ${speed}\n` +
+      `progress: ${(playerSystem.progress * 100).toFixed(0)}%  status: ${player.status}\n` +
+      `cargo: ${player.cargo} | items: ${itemPool.activeCount} | fps: ${fps}`;
+  }, 250);
 }
 
 window.addEventListener("resize", () => {
@@ -86,7 +102,7 @@ window.addEventListener("resize", () => {
 
 gameBus.emit("loop:start", undefined);
 loop.start();
-round.start(); // LOBBY → GREEN 으로 진입시켜 페이즈 순환을 관찰 가능하게.
+round.start();
 
 // 개발 편의: 콘솔 접근 노출.
 (window as unknown as { __game?: unknown }).__game = {
@@ -95,7 +111,10 @@ round.start(); // LOBBY → GREEN 으로 진입시켜 페이즈 순환을 관찰
   gameBus,
   round,
   RoundPhase,
+  MoverStatus,
   seeker,
   player,
   itemPool,
+  input,
+  playerSystem,
 };

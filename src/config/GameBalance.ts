@@ -81,6 +81,27 @@ export const GameBalance = {
     greenWindowsToFinishMin: 6,
     greenWindowsToFinishMax: 10,
   },
+
+  /**
+   * 트랙 형상(월드 유닛).
+   * ⚠ Phase 3 추가 노브. 전진 방향은 -z. 완주선 z = startZ - length.
+   *   length는 "중속으로 그린 창 6~10회 완주" 기준의 튜닝 대상.
+   */
+  track: {
+    startZ: 0,
+    length: 32,
+    /** 좌우 레인 반폭(이후 낙하 짐 위치/충돌에 사용). */
+    laneHalfWidth: 3,
+  },
+
+  /**
+   * 판정 임계값.
+   * ⚠ Phase 3 추가 노브.
+   */
+  judge: {
+    /** 이 속도(유닛/초) 이하는 "정지"로 간주. RED 중 이 값 초과 시 이동=탈락. */
+    moveThreshold: 0.08,
+  },
 } as const;
 
 export type GameBalanceConfig = typeof GameBalance;
