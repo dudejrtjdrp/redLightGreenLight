@@ -19,19 +19,50 @@ export function stackHeightFactor(cargo: number): number {
   return 1 + BalanceConfig.stackHeightSensitivity * cargo;
 }
 
-/** 매 프레임 불안정성 적분(양성 피드백 + 노이즈 + 감쇠). 짐 없으면 안정. */
+/** 매 프레임 불안정성 적분(양성 피드백 + 드리프트 + 노이즈 + 감쇠). 짐 없으면 안정. */
 export function integrateTilt(mover: Mover, dt: number): void {
   if (mover.cargo <= 0) {
     mover.tilt = 0;
     mover.tiltVel = 0;
+    mover.driftBias = 0;
     return;
   }
   const hf = stackHeightFactor(mover.cargo);
+
+  // 상시 드리프트: 방향이 서서히 바뀌는 random-walk 바이어스(직진해도 쏠림).
+  mover.driftBias +=
+    (Math.random() * 2 - 1) * BalanceConfig.driftNoiseScale * dt;
+  if (mover.driftBias > BalanceConfig.driftMax) mover.driftBias = BalanceConfig.driftMax;
+  else if (mover.driftBias < -BalanceConfig.driftMax) mover.driftBias = -BalanceConfig.driftMax;
+
+  // 양성 피드백 + 드리프트 주입.
   mover.tiltVel += BalanceConfig.instabilityGain * mover.tilt * hf * dt;
-  mover.tiltVel += (Math.random() * 2 - 1) * BalanceConfig.instabilityNoise * dt;
+  mover.tiltVel += BalanceConfig.straightDriftGain * mover.driftBias * dt;
+
+  // 미세 노이즈는 데드존 밖에서만(중심 근처 떨림 제거).
+  if (Math.abs(mover.tilt) >= BalanceConfig.centerDeadzone) {
+    mover.tiltVel +=
+      (Math.random() * 2 - 1) * BalanceConfig.instabilityNoise * dt;
+  }
+
   mover.tiltVel -= mover.tiltVel * BalanceConfig.damping * dt; // 감쇠(마찰)
   mover.tilt += mover.tiltVel * dt;
+
+  // 데드존: 중심 근처 저속이면 미세 떨림을 적극 감쇠(완전 정지는 아님).
+  if (
+    Math.abs(mover.tilt) < BalanceConfig.centerDeadzone &&
+    Math.abs(mover.tiltVel) < BalanceConfig.centerDeadzone
+  ) {
+    mover.tilt *= 0.82;
+    mover.tiltVel *= 0.6;
+  }
+
   clampBalance(mover);
+}
+
+/** 입력 중립 시 중심으로 끌어오는 약한 복원(settle-assist). 완전 자동복구는 아님. */
+export function applySettleAssist(mover: Mover, dt: number): void {
+  mover.tiltVel -= BalanceConfig.settleAssist * mover.tilt * dt;
 }
 
 /** 급정지 킥. vStop = 정지 직전 속력. 빠를수록 큰 킥. */

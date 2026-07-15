@@ -40,6 +40,8 @@ export interface Mover {
   tilt: number;
   /** 기울기 속도. */
   tiltVel: number;
+  /** 상시 드리프트 바이어스(random-walk). 직진해도 서서히 한쪽으로 쏠리게. */
+  driftBias: number;
   /** RED 중 균형(A/D) 보정 누적 경고 수. */
   warnings: number;
   /** 경고 디바운스 남은 시간(초). */
@@ -57,6 +59,7 @@ export function createMover(id: number, spawn: Vec2 = vec2()): Mover {
     cargoDelivered: 0,
     tilt: 0,
     tiltVel: 0,
+    driftBias: 0,
     warnings: 0,
     warnCooldown: 0,
   };

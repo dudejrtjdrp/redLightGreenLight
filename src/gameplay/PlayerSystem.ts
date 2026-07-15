@@ -25,6 +25,7 @@ import {
   integrateTilt,
   applyStopImpulse,
   applyCounter,
+  applySettleAssist,
   tiltDropCount,
   relieveAfterDrop,
 } from "./BalanceSystem";
@@ -37,6 +38,8 @@ import {
 export class PlayerSystem {
   private prevHolding = false;
   private prevPhase: RoundPhase = RoundPhase.LOBBY;
+  /** 스무딩된 좌우 입력(연속). 급격한 튐 방지. */
+  private smoothLateral = 0;
 
   constructor(
     private readonly mover: Mover,
@@ -61,7 +64,12 @@ export class PlayerSystem {
 
     this.mover.speedMode = this.input.speedMode;
     const holding = this.input.isForward;
-    const lateral = this.input.lateral; // -1/0/+1
+    const rawLateral = this.input.lateral; // -1/0/+1 (경고 판정용, 즉각)
+
+    // 입력 스무딩(연속값): 급격한 튐 방지.
+    this.smoothLateral +=
+      (rawLateral - this.smoothLateral) *
+      Math.min(1, BalanceConfig.inputSmoothing * dt);
 
     // --- 전진(z) ---
     const speed = stepMovement(this.mover, holding, dt);
@@ -72,13 +80,16 @@ export class PlayerSystem {
     }
     this.prevHolding = holding;
 
-    // --- 좌우 이동 + counter-torque(되잡기) ---
-    if (lateral !== 0) {
-      this.moveLateral(lateral, dt);
-      applyCounter(this.mover, lateral, dt);
+    // --- 좌우 이동 + counter-torque(되잡기): 스무딩된 연속 입력으로 항상 적용 ---
+    this.moveLateral(this.smoothLateral, dt);
+    applyCounter(this.mover, this.smoothLateral, dt);
+
+    // --- 입력 중립 시 약한 settle-assist(자동복구는 아님) ---
+    if (rawLateral === 0) {
+      applySettleAssist(this.mover, dt);
     }
 
-    // --- 불안정성 적분(안 잡으면 쏠림) ---
+    // --- 불안정성 적분(안 잡으면 쏠림, 직진 중에도 드리프트) ---
     integrateTilt(this.mover, dt);
 
     // 경고 디바운스 타이머 감소(항상).
@@ -93,8 +104,8 @@ export class PlayerSystem {
         this.round.registerActivity();
         return;
       }
-      // (7) A/D 균형 보정 → 경고(디바운스: 보정 이벤트당 1회)
-      if (lateral !== 0 && this.mover.warnCooldown <= 0) {
+      // (7) A/D 균형 보정 → 경고(디바운스: 보정 이벤트당 1회). 즉각 입력(rawLateral) 기준.
+      if (rawLateral !== 0 && this.mover.warnCooldown <= 0) {
         this.mover.warnings += 1;
         this.mover.warnCooldown = BalanceConfig.warningCooldown;
         // [RED 딜레마 검증] 균형을 잡으면 낙하는 막지만 경고를 소모한다.

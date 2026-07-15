@@ -33,6 +33,19 @@ export interface BalanceConfigShape {
   counterTorque: number;
   /** A/D 좌우 이동 속도(유닛/초). */
   lateralMoveSpeed: number;
+  /** 입력 스무딩 속도(초당). 높을수록 즉각적, 낮을수록 부드럽게 램프(급격한 튐 방지). */
+  inputSmoothing: number;
+  /** 입력 중립일 때 중심으로 끌어오는 약한 복원(자동복구는 아님). */
+  settleAssist: number;
+  /** 중심 근처 미세 떨림 제거 데드존(|tilt| 이 값 미만이면 노이즈 억제/감쇠). */
+  centerDeadzone: number;
+
+  /** 직진 중에도 tiltVel에 주입되는 상시 드리프트 바이어스 세기(0=끔). */
+  straightDriftGain: number;
+  /** 드리프트 바이어스의 random-walk 노이즈 스케일(방향이 서서히 바뀜). */
+  driftNoiseScale: number;
+  /** 드리프트 바이어스 절대값 상한. */
+  driftMax: number;
 
   /** 안전장치: tilt/tiltVel 절대값 상한(시각 폭주 방지). */
   maxTilt: number;
@@ -59,8 +72,15 @@ export const BalanceConfig: BalanceConfigShape = {
   damping: 2.0,
   stackHeightSensitivity: 0.3,
 
-  counterTorque: 6.0,
-  lateralMoveSpeed: 2.0,
+  counterTorque: 10.0,
+  lateralMoveSpeed: 2.2,
+  inputSmoothing: 14.0,
+  settleAssist: 2.6,
+  centerDeadzone: 0.06,
+
+  straightDriftGain: 1.3,
+  driftNoiseScale: 1.6,
+  driftMax: 1.0,
 
   maxTilt: 2.5,
   maxTiltVel: 8.0,

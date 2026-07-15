@@ -18,15 +18,19 @@ export const EffectConfig = {
     maxLean: 0.45,
   },
 
-  /** 낙하 조각 연출(Object Pool 경유). */
+  /**
+   * 낙하 조각 연출(Object Pool 경유).
+   * Phase 4 보완: 바닥 피벗 회전 금지 → 수평(±X)으로 밀려나며 떨어지게.
+   * spin=0(회전 없음), spread↑(옆으로 밀림), hopUp↓(팝 최소).
+   */
   dropEffect: {
     poolSize: 24,
     size: 0.2,
     duration: 1.1,
     gravity: 9.0,
-    hopUp: 2.2,
-    spread: 0.9,
-    spin: 8.0,
+    hopUp: 1.0,
+    spread: 1.7,
+    spin: 0.0,
   },
 
   /** 술래 회전(무궁화꽃 텔 연출). */

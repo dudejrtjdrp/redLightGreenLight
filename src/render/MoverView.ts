@@ -218,16 +218,16 @@ export class MoverView {
       this.boxes[i].visible = i < this.mover.cargo;
     }
 
-    // --- 스택 기울기: 데이터 tilt를 lag로 따라감 + 채찍(윗짐 오프셋) ---
+    // --- 스택 기울기: 데이터 tilt를 lag로 따라감 → 전단(shear)으로 표현 ---
+    // 바닥 한 점 피벗 회전 금지. 높이 인덱스에 비례한 가로 오프셋으로 "위로 갈수록 밀림".
     const st = ArtConfig.stackTilt;
     this.visTilt += (this.mover.tilt - this.visTilt) * Math.min(1, st.follow * dt);
-    let lean = this.visTilt * st.visualScale;
-    if (lean > st.maxLean) lean = st.maxLean;
-    else if (lean < -st.maxLean) lean = -st.maxLean;
-    this.stack.rotation.z = lean;
-    // 채찍: 위 칸일수록 가로로 더 밀림(늦게 따라오는 느낌).
+    this.stack.rotation.z = 0; // 회전 제거
     for (let i = 0; i < this.boxes.length; i++) {
-      this.boxes[i].position.x = this.visTilt * st.whipPerLevel * (i + 1);
+      let x = this.visTilt * st.shearPerLevel * i; // i=바닥(0) → 안 밀림, 위일수록 큼
+      if (x > st.maxShear) x = st.maxShear;
+      else if (x < -st.maxShear) x = -st.maxShear;
+      this.boxes[i].position.x = x;
     }
 
     // --- 플린치(몸통 스쿼시) ---
