@@ -45,7 +45,11 @@ export const GameBalance = {
   },
 
   /**
-   * FAKE PHYSICS 낙하 모델.
+   * @deprecated Phase 4 개정(Balance Kick)으로 사용 중단.
+   *   낙하는 이제 tilt 기반(BalanceConfig)으로 판정한다. 급정지는 tilt에 킥만 준다.
+   *   히스토리/롤백 참고용으로만 남김.
+   *
+   * FAKE PHYSICS 낙하 모델(구).
    * 낙하 개수 = ceil((vStop - vSafe) / step)
    *  - vStop: 급정지 직전 속도(정규화 0~1)
    *  - vSafe: 이 속도 이하로 멈추면 낙하 없음

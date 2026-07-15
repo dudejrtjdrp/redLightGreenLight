@@ -28,10 +28,12 @@ declare module "../core/EventBus" {
     "phase:change": { from: RoundPhase; to: RoundPhase };
     /** 짐 낙하: 낙하한 짐 1개당 1회 emit (술래 +1점 근거) */
     "item:dropped": { itemId: number; byMoverId: number; position: Vec2 };
-    /** 무버 체포: 레드 때 움직여 탈락 */
+    /** 무버 체포: 레드 때 전진 이동 또는 경고 누적 초과로 탈락 */
     "mover:caught": { moverId: number };
     /** 무버 완주: 도착 지점 진입 */
     "mover:finished": { moverId: number; cargoDelivered: number };
+    /** RED 중 균형(A/D) 보정 1회 경고 누적(시각 플래시/술래 응시용) */
+    "mover:warned": { moverId: number; warnings: number };
   }
 }
 
@@ -57,6 +59,14 @@ export function emitItemDropped(item: Item, byMoverId: number, position: Vec2): 
 export function emitMoverCaught(mover: Mover): void {
   mover.status = MoverStatus.CAUGHT;
   gameBus.emit("mover:caught", { moverId: mover.id });
+}
+
+/** RED 중 균형 보정 경고 누적 발행(탈락 여부는 호출측이 판단). */
+export function emitMoverWarned(mover: Mover): void {
+  gameBus.emit("mover:warned", {
+    moverId: mover.id,
+    warnings: mover.warnings,
+  });
 }
 
 /** 무버 완주 처리하고 이벤트 발행. (도착선 진입 지점) */

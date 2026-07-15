@@ -1,28 +1,24 @@
 /**
  * MoverView.ts
- * 무버 = 귀여운 로우폴리 카멜레온. 외부 모델 없이 Three.js 프리미티브 조합으로 제작.
+ * 무버 = 귀여운 로우폴리 카멜레온. Three.js 프리미티브 조합(외부 모델 없음).
  *
  * 성능:
- *  - 지오메트리는 모듈 스코프에서 공유(SHARED) → 무버 여러 명이어도 지오 재사용, draw call 최소화.
- *  - 색이 바뀌는 몸통 머티리얼만 인스턴스별로 소유. 눈/다리/꼬리/짐은 공유 머티리얼.
- *  - 매 프레임 new 없음. 색/눈크기/흔들림은 in-place lerp.
+ *  - 지오메트리는 모듈 스코프에서 공유(SHARED) → 무버 여러 명이어도 지오 재사용.
+ *  - 색 바뀌는 몸통 머티리얼만 인스턴스별 소유. 나머지는 공유. 매 프레임 new 없음.
  *
- * 아트=가독성(색-상태 매핑):
- *  - GREEN: 초록 / 눈 평상.
- *  - TELL : 초록→빨강 lerp(위험 예고를 몸으로).
- *  - RED  : 빨강/경직, 눈 크게.
- *  - 탈락 : 빨강으로 굳고 눈 뱅글.
- * 짐 스택은 등 위에 쌓이며, 높을수록 더 흔들려 "위태로움"을 보여준다(Phase 6 lean/shake 재사용).
+ * 아트=가독성:
+ *  - 색-상태: GREEN 초록 / TELL 초록→빨강 lerp / RED 빨강+눈 크게 / 탈락 굳음+눈 뱅글.
+ *  - 스택 기울기: 데이터 mover.tilt 를 소스로(Phase 4 개정). 윗짐이 늦게 따라오는 채찍 효과.
+ *  - 경고 플래시: mover:warned 때 흰색 순간 발광.
  */
 
 import * as THREE from "three";
 import { Mover, MoverStatus, SpeedMode } from "../gameplay/Mover";
 import { RoundPhase } from "../gameplay/RoundState";
 import { ItemConfig } from "../config/ItemConfig";
-import { EffectConfig } from "../config/EffectConfig";
 import { ArtConfig } from "../config/ArtConfig";
 
-// --- 공유 지오메트리(로우폴리, 전 인스턴스 재사용) ---
+// --- 공유 지오메트리(로우폴리) ---
 const SHARED = {
   body: new THREE.SphereGeometry(1, 12, 10),
   eye: new THREE.SphereGeometry(1, 10, 8),
@@ -45,6 +41,8 @@ const MAT = {
   cargo: new THREE.MeshStandardMaterial({ color: 0xffcc44, roughness: 0.7 }),
 };
 
+const BODY_SCALE = new THREE.Vector3(0.42, 0.4, 0.62);
+
 export class MoverView {
   readonly group: THREE.Group;
 
@@ -54,12 +52,12 @@ export class MoverView {
   private readonly stack: THREE.Group;
   private readonly boxes: THREE.Mesh[] = [];
 
-  // 흔들림/플린치 트윈 상태
-  private shakeEnergy = 0;
-  private shakeTime = 0;
+  // 스택 시각 tilt(데이터 tilt를 lag로 따라감), 플린치, 경고 플래시
+  private visTilt = 0;
   private flinchEnergy = 0;
+  private flashEnergy = 0;
 
-  // 색-상태 lerp (in-place, 재사용 Color)
+  // 색-상태 lerp (in-place)
   private readonly curColor: THREE.Color;
   private readonly curEmissive: THREE.Color;
   private readonly targetColor = new THREE.Color(ArtConfig.chameleon.bodyGreen);
@@ -77,39 +75,34 @@ export class MoverView {
     this.curColor = new THREE.Color(c.bodyGreen);
     this.curEmissive = new THREE.Color(c.emissiveGreen);
 
-    // 몸통(둥근 egg 스케일).
     this.bodyMat = new THREE.MeshStandardMaterial({
       color: this.curColor.clone(),
       emissive: this.curEmissive.clone(),
       roughness: 0.55,
     });
     this.body = new THREE.Mesh(SHARED.body, this.bodyMat);
-    this.body.scale.set(0.42, 0.4, 0.62);
+    this.body.scale.copy(BODY_SCALE);
     this.body.position.y = 0.42;
     this.setShadow(this.body);
     this.group.add(this.body);
 
-    // 눈 2개(독립 구, 크게). 앞쪽(+z) 상단에 좌우로. 각 눈은 pivot(뱅글 회전용).
+    // 눈 2개(pivot으로 뱅글 회전).
     for (const sx of [-1, 1]) {
       const pivot = new THREE.Group();
       pivot.position.set(sx * 0.2, 0.62, 0.34);
-
       const ball = new THREE.Mesh(SHARED.eye, MAT.eye);
       ball.scale.setScalar(0.17);
       this.setShadow(ball);
       pivot.add(ball);
-
       const pupil = new THREE.Mesh(SHARED.pupil, MAT.pupil);
       pupil.scale.setScalar(0.08);
       pupil.position.set(sx * 0.05, 0.02, 0.13);
       pivot.add(pupil);
-
       this.group.add(pivot);
       this.eyePivots.push(pivot);
     }
 
-    // 짧은 다리 4개.
-    const legY = 0.14;
+    // 다리 4개.
     for (const [lx, lz] of [
       [-0.24, 0.3],
       [0.24, 0.3],
@@ -117,20 +110,18 @@ export class MoverView {
       [0.24, -0.28],
     ] as const) {
       const leg = new THREE.Mesh(SHARED.leg, MAT.leg);
-      leg.position.set(lx, legY, lz);
+      leg.position.set(lx, 0.14, lz);
       leg.rotation.z = lx < 0 ? 0.3 : -0.3;
       this.setShadow(leg);
       this.group.add(leg);
     }
 
-    // 돌돌 말린 꼬리(구 세그먼트 체인, 뒤로 갈수록 작아지며 위로 말림).
+    // 말린 꼬리.
     const segs = 6;
     for (let i = 0; i < segs; i++) {
       const t = i / (segs - 1);
       const seg = new THREE.Mesh(SHARED.tail, MAT.tail);
-      const r = 0.12 * (1 - t * 0.6);
-      seg.scale.setScalar(r);
-      // 뒤(-z)로 나가다 위로 말리는 근사 곡선.
+      seg.scale.setScalar(0.12 * (1 - t * 0.6));
       const angle = t * Math.PI * 1.4;
       seg.position.set(
         0,
@@ -141,7 +132,7 @@ export class MoverView {
       this.group.add(seg);
     }
 
-    // 짐 스택(등 위, 공유 지오/머티리얼).
+    // 짐 스택.
     this.stack = new THREE.Group();
     this.stack.position.set(0, 0.72, -0.02);
     this.group.add(this.stack);
@@ -159,7 +150,6 @@ export class MoverView {
     if (this.shadows) m.castShadow = true;
   }
 
-  /** 페이즈에 따른 목표 색/눈크기 설정(탈락 시엔 update에서 우선 적용). */
   setPhase(phase: RoundPhase): void {
     this.phase = phase;
     const c = ArtConfig.chameleon;
@@ -168,25 +158,23 @@ export class MoverView {
     this.targetEmissive.setHex(danger ? c.emissiveRed : c.emissiveGreen);
   }
 
-  /** 낙하/급정지 흔들림 임펄스. */
-  addShake(impulse: number): void {
-    this.shakeEnergy = Math.min(1, this.shakeEnergy + impulse);
-  }
-
-  /** 낙하 시 카멜레온 움찔(스쿼시) 임펄스. */
+  /** 낙하 시 몸통 움찔(스쿼시). */
   addFlinch(impulse: number): void {
     this.flinchEnergy = Math.min(1, this.flinchEnergy + impulse);
+  }
+
+  /** 경고 시 흰색 플래시. */
+  flash(impulse: number): void {
+    this.flashEnergy = Math.min(1, this.flashEnergy + impulse);
   }
 
   update(dt: number): void {
     const c = ArtConfig.chameleon;
     const caught = this.mover.status === MoverStatus.CAUGHT;
 
-    // 위치 동기화(1D 트랙).
+    // 위치 동기화 + 전진 방향(-z)을 향하도록 180도.
     this.group.position.x = this.mover.position.x;
     this.group.position.z = this.mover.position.z;
-
-    // 진행 방향(+? 카멜레온이 앞을 보게) — 전진은 -z, 눈이 +z에 있으니 180도 돌려 정면 향하게.
     this.group.rotation.y = Math.PI;
 
     // --- 색-상태 lerp ---
@@ -203,20 +191,26 @@ export class MoverView {
     this.bodyMat.color.copy(this.curColor);
     this.bodyMat.emissive.copy(this.curEmissive);
 
-    // 빠름 모드는 살짝 채도 높은 느낌으로 emissive 가산(선택적, 가독성 보조).
+    // 경고 플래시(흰색 가산).
+    if (this.flashEnergy > 0) {
+      this.flashEnergy = Math.max(
+        0,
+        this.flashEnergy - ArtConfig.warnFlash.decayPerSec * dt,
+      );
+      this.bodyMat.emissive.addScalar(this.flashEnergy * ArtConfig.warnFlash.strength);
+    }
+
     this.bodyMat.emissiveIntensity =
       this.mover.speedMode === SpeedMode.FAST && !caught ? 1.15 : 0.85;
 
-    // --- 눈: RED/탈락에 크게, 탈락 시 뱅글 ---
+    // --- 눈: RED/탈락 크게, 탈락 뱅글 ---
     const alert = caught || this.phase === RoundPhase.RED;
     const targetEye = alert ? c.eyeScaleAlert : c.eyeScaleCalm;
     this.eyeScale += (targetEye - this.eyeScale) * t;
     for (let i = 0; i < this.eyePivots.length; i++) {
       const p = this.eyePivots[i];
       p.scale.setScalar(this.eyeScale);
-      if (caught) {
-        p.rotation.z += (i === 0 ? 1 : -1) * c.eyeSpinSpeed * dt;
-      }
+      if (caught) p.rotation.z += (i === 0 ? 1 : -1) * c.eyeSpinSpeed * dt;
     }
 
     // --- 짐 개수 표시 ---
@@ -224,19 +218,16 @@ export class MoverView {
       this.boxes[i].visible = i < this.mover.cargo;
     }
 
-    // --- 스택 흔들림(감쇠 사인, 스택 높을수록 크게) ---
-    const cs = EffectConfig.cargoShake;
-    if (this.shakeEnergy > 0) {
-      this.shakeTime += dt;
-      this.shakeEnergy = Math.max(0, this.shakeEnergy - cs.decayPerSec * dt);
-      const amp =
-        cs.maxLean + ArtConfig.stackShakePerBox * this.mover.cargo;
-      const lean = Math.sin(this.shakeTime * cs.freq) * this.shakeEnergy * amp;
-      this.stack.rotation.z = lean;
-      this.stack.rotation.x = lean * 0.5;
-    } else if (this.stack.rotation.z !== 0 || this.stack.rotation.x !== 0) {
-      this.stack.rotation.z = 0;
-      this.stack.rotation.x = 0;
+    // --- 스택 기울기: 데이터 tilt를 lag로 따라감 + 채찍(윗짐 오프셋) ---
+    const st = ArtConfig.stackTilt;
+    this.visTilt += (this.mover.tilt - this.visTilt) * Math.min(1, st.follow * dt);
+    let lean = this.visTilt * st.visualScale;
+    if (lean > st.maxLean) lean = st.maxLean;
+    else if (lean < -st.maxLean) lean = -st.maxLean;
+    this.stack.rotation.z = lean;
+    // 채찍: 위 칸일수록 가로로 더 밀림(늦게 따라오는 느낌).
+    for (let i = 0; i < this.boxes.length; i++) {
+      this.boxes[i].position.x = this.visTilt * st.whipPerLevel * (i + 1);
     }
 
     // --- 플린치(몸통 스쿼시) ---
@@ -246,9 +237,13 @@ export class MoverView {
         this.flinchEnergy - ArtConfig.flinch.decayPerSec * dt,
       );
       const s = this.flinchEnergy * ArtConfig.flinch.scale;
-      this.body.scale.set(0.42 * (1 + s), 0.4 * (1 - s), 0.62 * (1 + s));
+      this.body.scale.set(
+        BODY_SCALE.x * (1 + s),
+        BODY_SCALE.y * (1 - s),
+        BODY_SCALE.z * (1 + s),
+      );
     } else {
-      this.body.scale.set(0.42, 0.4, 0.62);
+      this.body.scale.copy(BODY_SCALE);
     }
   }
 }

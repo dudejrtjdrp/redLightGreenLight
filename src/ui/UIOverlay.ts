@@ -11,6 +11,7 @@ import { Mover, MoverStatus } from "../gameplay/Mover";
 import { Seeker } from "../gameplay/Seeker";
 import { ScoreSystem } from "../gameplay/ScoreSystem";
 import { GameBalance } from "../config/GameBalance";
+import { BalanceConfig } from "../config/BalanceConfig";
 
 export interface UIRefs {
   round: RoundStateMachine;
@@ -80,9 +81,12 @@ export class UIOverlay {
     this.banner.textContent = `${style.chant}  [${round.phase}]`;
 
     // 스탯.
+    const tiltBar = this.tiltBar(player.tilt);
     this.stats.textContent =
       `타이머: ${round.elapsedRound.toFixed(1)}s\n` +
       `내 짐: ${player.cargo}   진행: ${this.progressPct()}%\n` +
+      `균형: ${tiltBar}\n` +
+      `경고: ${player.warnings} / ${BalanceConfig.warningMax}\n` +
       `내 상태: ${this.statusKo(player)}`;
 
     // 리더보드: 무버 + 술래 통합 정렬.
@@ -109,6 +113,20 @@ export class UIOverlay {
     return Math.round(
       Math.min(1, Math.max(0, traveled / GameBalance.track.length)) * 100,
     );
+  }
+
+  /** tilt를 -threshold..+threshold 게이지로. 중앙(|)에 가까울수록 안정. */
+  private tiltBar(tilt: number): string {
+    const th = BalanceConfig.tiltDropThreshold;
+    const n = 11;
+    const mid = Math.floor(n / 2);
+    const clamped = Math.max(-1, Math.min(1, tilt / th));
+    const pos = Math.round(mid + clamped * mid);
+    let s = "";
+    for (let i = 0; i < n; i++) {
+      s += i === pos ? "●" : i === mid ? "|" : "·";
+    }
+    return `[${s}]`;
   }
 
   private statusKo(m: Mover): string {

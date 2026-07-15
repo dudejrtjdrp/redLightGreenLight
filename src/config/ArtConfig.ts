@@ -29,6 +29,32 @@ export const ArtConfig = {
   /** 짐 스택이 높을수록 추가되는 흔들림(위태로움 표현). 칸당 가산 기울기. */
   stackShakePerBox: 0.06,
 
+  /** 스택 시각 기울기: 데이터 tilt → 메쉬 회전. 윗짐이 늦게 따라오는 채찍 효과. */
+  stackTilt: {
+    /** tilt(라디안 아님, 스칼라) → 스택 회전 배율. */
+    visualScale: 0.55,
+    /** 시각 tilt가 데이터 tilt를 따라가는 속도(초당). 낮을수록 늦게 따라옴(lag). */
+    follow: 9,
+    /** 윗짐일수록 커지는 채찍 가로 오프셋(칸당). */
+    whipPerLevel: 0.05,
+    /** 시각 회전 상한(rad). */
+    maxLean: 0.8,
+  },
+
+  /** 경고 1회 시 캐릭터 흰색 플래시. */
+  warnFlash: {
+    impulse: 1.0,
+    decayPerSec: 3.5,
+    strength: 0.9,
+  },
+
+  /** 경고 시 술래 응시 강화(순간 확대/전진). */
+  seekerPulse: {
+    impulse: 1.0,
+    decayPerSec: 3.0,
+    scale: 0.16,
+  },
+
   /** 낙하 시 카멜레온 움찔(스쿼시). */
   flinch: {
     dropImpulse: 1.0,

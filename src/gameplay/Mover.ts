@@ -34,6 +34,16 @@ export interface Mover {
   status: MoverStatus;
   /** 완주 시 실제로 들고 들어간 짐 개수 (RESOLVE/END 정산용) */
   cargoDelivered: number;
+
+  // --- Phase 4 개정: 스택 균형 킥 상태(스칼라만, 개별 강체 없음) ---
+  /** 스택 기울기(부호 있음). 시각 흔들림/색의 소스. */
+  tilt: number;
+  /** 기울기 속도. */
+  tiltVel: number;
+  /** RED 중 균형(A/D) 보정 누적 경고 수. */
+  warnings: number;
+  /** 경고 디바운스 남은 시간(초). */
+  warnCooldown: number;
 }
 
 export function createMover(id: number, spawn: Vec2 = vec2()): Mover {
@@ -45,6 +55,10 @@ export function createMover(id: number, spawn: Vec2 = vec2()): Mover {
     cargo: PlayerConfig.startingCargo,
     status: MoverStatus.ALIVE,
     cargoDelivered: 0,
+    tilt: 0,
+    tiltVel: 0,
+    warnings: 0,
+    warnCooldown: 0,
   };
 }
 

@@ -11,12 +11,16 @@ import * as THREE from "three";
 import { RoundPhase } from "../gameplay/RoundState";
 import { GameBalance } from "../config/GameBalance";
 import { EffectConfig } from "../config/EffectConfig";
+import { ArtConfig } from "../config/ArtConfig";
 
 export class SeekerView {
   readonly group: THREE.Group;
   /** yaw 0 = 무버(+z) 응시, yaw PI = 등 돌림. */
   private yaw = Math.PI;
   private targetYaw = Math.PI;
+  /** 경고 시 응시 강화 펄스 에너지. */
+  private pulseEnergy = 0;
+  private readonly baseScale = 1;
 
   constructor() {
     this.group = new THREE.Group();
@@ -48,16 +52,34 @@ export class SeekerView {
     this.targetYaw = facing ? 0 : Math.PI;
   }
 
+  /** 경고 발생 시 응시 강화(순간 확대). */
+  pulse(impulse: number): void {
+    this.pulseEnergy = Math.min(1, this.pulseEnergy + impulse);
+  }
+
   update(dt: number): void {
-    if (this.yaw === this.targetYaw) return;
-    const rate = EffectConfig.seeker.turnSpeed * dt;
-    let diff = this.targetYaw - this.yaw;
-    while (diff > Math.PI) diff -= 2 * Math.PI;
-    while (diff < -Math.PI) diff += 2 * Math.PI;
-    const step = Math.sign(diff) * Math.min(Math.abs(diff), rate);
-    this.yaw += step;
-    // 목표 근접 시 스냅.
-    if (Math.abs(this.targetYaw - this.yaw) < 1e-3) this.yaw = this.targetYaw;
-    this.group.rotation.y = this.yaw;
+    // 회전 보간.
+    if (this.yaw !== this.targetYaw) {
+      const rate = EffectConfig.seeker.turnSpeed * dt;
+      let diff = this.targetYaw - this.yaw;
+      while (diff > Math.PI) diff -= 2 * Math.PI;
+      while (diff < -Math.PI) diff += 2 * Math.PI;
+      const step = Math.sign(diff) * Math.min(Math.abs(diff), rate);
+      this.yaw += step;
+      if (Math.abs(this.targetYaw - this.yaw) < 1e-3) this.yaw = this.targetYaw;
+      this.group.rotation.y = this.yaw;
+    }
+
+    // 경고 펄스: 순간 확대 후 감쇠.
+    if (this.pulseEnergy > 0) {
+      this.pulseEnergy = Math.max(
+        0,
+        this.pulseEnergy - ArtConfig.seekerPulse.decayPerSec * dt,
+      );
+      const s = this.baseScale + this.pulseEnergy * ArtConfig.seekerPulse.scale;
+      this.group.scale.setScalar(s);
+    } else if (this.group.scale.x !== this.baseScale) {
+      this.group.scale.setScalar(this.baseScale);
+    }
   }
 }

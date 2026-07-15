@@ -4,6 +4,7 @@
  *
  * 조작:
  *  - 전진: Space / ArrowUp / W  (hold = 전진, release = 정지)
+ *  - 좌우 균형(A/D): A / ArrowLeft = 좌, D / ArrowRight = 우 (스택 되잡기)
  *  - 속도모드 토글: Shift / E  (빠름 100% ↔ 신중 50%)
  *
  * 이벤트 리스너는 keydown/keyup 뿐. 폴링 기반이라 프레임마다 DOM 접근 없음.
@@ -12,10 +13,14 @@
 import { SpeedMode } from "../gameplay/Mover";
 
 const FORWARD_KEYS = new Set(["Space", "ArrowUp", "KeyW"]);
+const LEFT_KEYS = new Set(["ArrowLeft", "KeyA"]);
+const RIGHT_KEYS = new Set(["ArrowRight", "KeyD"]);
 const TOGGLE_KEYS = new Set(["ShiftLeft", "ShiftRight", "KeyE"]);
 
 export class InputController {
   private forward = false;
+  private leftDown = false;
+  private rightDown = false;
   private mode: SpeedMode = SpeedMode.CAREFUL;
 
   constructor(private readonly target: Window = window) {
@@ -26,6 +31,11 @@ export class InputController {
   /** 전진 입력 유지 여부 */
   get isForward(): boolean {
     return this.forward;
+  }
+
+  /** 좌우 균형 입력: -1(좌) / 0 / +1(우). 동시 입력은 상쇄. */
+  get lateral(): number {
+    return (this.rightDown ? 1 : 0) - (this.leftDown ? 1 : 0);
   }
 
   /** 현재 속도 모드 */
@@ -39,6 +49,16 @@ export class InputController {
       e.preventDefault(); // Space 스크롤 등 방지
       return;
     }
+    if (LEFT_KEYS.has(e.code)) {
+      this.leftDown = true;
+      e.preventDefault();
+      return;
+    }
+    if (RIGHT_KEYS.has(e.code)) {
+      this.rightDown = true;
+      e.preventDefault();
+      return;
+    }
     if (TOGGLE_KEYS.has(e.code)) {
       if (e.repeat) return; // 오토리핏은 토글 1회만
       this.mode =
@@ -50,6 +70,12 @@ export class InputController {
   private readonly onKeyUp = (e: KeyboardEvent): void => {
     if (FORWARD_KEYS.has(e.code)) {
       this.forward = false;
+      e.preventDefault();
+    } else if (LEFT_KEYS.has(e.code)) {
+      this.leftDown = false;
+      e.preventDefault();
+    } else if (RIGHT_KEYS.has(e.code)) {
+      this.rightDown = false;
       e.preventDefault();
     }
   };

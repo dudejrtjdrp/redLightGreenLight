@@ -1,0 +1,78 @@
+/**
+ * BalanceSystem.ts
+ * 스택 균형 킥의 fake physics(스칼라만). 무버 1명당 tilt/tiltVel 하나.
+ * 개별 짐 강체 없음 — 각 짐의 시각은 tilt에서 파생(MoverView).
+ *
+ * 모델:
+ *  - 불안정성: tiltVel += instabilityGain * tilt * stackHeightFactor * dt  (양성 피드백)
+ *              + 노이즈, 그리고 damping으로 tiltVel 감쇠.
+ *  - 급정지 킥: tiltVel += impulseScale * max(0, vStop - safeSpeed) * 방향.
+ *  - counter-torque(A/D): tiltVel -= counterTorque * dir * dt (쏠린 쪽으로 움직여 되잡기).
+ *  - 낙하: |tilt| > threshold 초과량에 비례해 위쪽 짐부터. 낙하 후 tilt 완화(자기보정).
+ */
+
+import { BalanceConfig } from "../config/BalanceConfig";
+import { Mover } from "./Mover";
+
+/** 스택 높을수록 불안정: 1 + sensitivity*cargo. "탐욕이 곧 불안정". */
+export function stackHeightFactor(cargo: number): number {
+  return 1 + BalanceConfig.stackHeightSensitivity * cargo;
+}
+
+/** 매 프레임 불안정성 적분(양성 피드백 + 노이즈 + 감쇠). 짐 없으면 안정. */
+export function integrateTilt(mover: Mover, dt: number): void {
+  if (mover.cargo <= 0) {
+    mover.tilt = 0;
+    mover.tiltVel = 0;
+    return;
+  }
+  const hf = stackHeightFactor(mover.cargo);
+  mover.tiltVel += BalanceConfig.instabilityGain * mover.tilt * hf * dt;
+  mover.tiltVel += (Math.random() * 2 - 1) * BalanceConfig.instabilityNoise * dt;
+  mover.tiltVel -= mover.tiltVel * BalanceConfig.damping * dt; // 감쇠(마찰)
+  mover.tilt += mover.tiltVel * dt;
+  clampBalance(mover);
+}
+
+/** 급정지 킥. vStop = 정지 직전 속력. 빠를수록 큰 킥. */
+export function applyStopImpulse(mover: Mover, vStop: number): void {
+  const excess = Math.max(0, vStop - BalanceConfig.safeSpeed);
+  if (excess <= 0) return;
+  const dir =
+    Math.abs(mover.tilt) > 1e-3
+      ? Math.sign(mover.tilt)
+      : Math.random() < 0.5
+        ? -1
+        : 1;
+  mover.tiltVel += BalanceConfig.impulseScale * excess * dir;
+  clampBalance(mover);
+}
+
+/** A/D 되잡기. dir: -1(A/좌) / +1(D/우). 쏠린 쪽으로 움직여 tilt를 0 근처로. */
+export function applyCounter(mover: Mover, dir: number, dt: number): void {
+  mover.tiltVel -= BalanceConfig.counterTorque * dir * dt;
+  clampBalance(mover);
+}
+
+/** |tilt| 초과 시 낙하 개수(초과량 비례). 보유량으로 상한. */
+export function tiltDropCount(mover: Mover): number {
+  const over = Math.abs(mover.tilt) - BalanceConfig.tiltDropThreshold;
+  if (over <= 0) return 0;
+  const n = Math.ceil(over / BalanceConfig.tiltDropStep);
+  return Math.min(n, mover.cargo);
+}
+
+/** 낙하 후 스택 완화 → 불안정성 자기보정(짐도 줄어듦). */
+export function relieveAfterDrop(mover: Mover): void {
+  mover.tilt *= BalanceConfig.tiltReliefFactor;
+  mover.tiltVel *= 0.3;
+}
+
+/** 안전장치: tilt/tiltVel 절대값 상한. */
+export function clampBalance(mover: Mover): void {
+  const { maxTilt, maxTiltVel } = BalanceConfig;
+  if (mover.tilt > maxTilt) mover.tilt = maxTilt;
+  else if (mover.tilt < -maxTilt) mover.tilt = -maxTilt;
+  if (mover.tiltVel > maxTiltVel) mover.tiltVel = maxTiltVel;
+  else if (mover.tiltVel < -maxTiltVel) mover.tiltVel = -maxTiltVel;
+}

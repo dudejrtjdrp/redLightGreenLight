@@ -11,7 +11,6 @@ import { SeekerView } from "./SeekerView";
 import { DroppedItemsView } from "./DroppedItemsView";
 import { EffectSystem } from "./EffectSystem";
 import { gameBus } from "../core/EventBus";
-import { GameBalance } from "../config/GameBalance";
 import { EffectConfig } from "../config/EffectConfig";
 import { ArtConfig } from "../config/ArtConfig";
 import { RoundPhase } from "../gameplay/RoundState";
@@ -24,7 +23,6 @@ export class GameRenderer {
   private readonly seekerView: SeekerView;
   private readonly droppedView: DroppedItemsView;
   private readonly effects: EffectSystem;
-  private prevSpeed = 0;
 
   // 스크린셰이크 상태
   private shakeEnergy = 0;
@@ -51,9 +49,8 @@ export class GameRenderer {
       this.seekerView.setPhase(to);
       this.moverView.setPhase(to);
     });
-    // 낙하 주스: 스택 흔들림 + 카멜레온 움찔 + 스크린셰이크.
+    // 낙하 주스: 카멜레온 움찔 + 스크린셰이크. (스택 기울기는 tilt가 소스이므로 별도 흔들림 없음)
     gameBus.on("item:dropped", () => {
-      this.moverView.addShake(EffectConfig.cargoShake.impulseDrop);
       this.moverView.addFlinch(ArtConfig.flinch.dropImpulse);
       this.addScreenShake(ArtConfig.screenShake.dropEnergy);
     });
@@ -61,6 +58,11 @@ export class GameRenderer {
     gameBus.on("mover:caught", () =>
       this.addScreenShake(ArtConfig.screenShake.caughtEnergy),
     );
+    // 경고 주스: 카멜레온 흰색 플래시 + 술래 응시 강화.
+    gameBus.on("mover:warned", () => {
+      this.moverView.flash(ArtConfig.warnFlash.impulse);
+      this.seekerView.pulse(ArtConfig.seekerPulse.impulse);
+    });
 
     this.seekerView.setPhase(RoundPhase.GREEN);
     this.moverView.setPhase(RoundPhase.GREEN);
@@ -71,14 +73,7 @@ export class GameRenderer {
   }
 
   update(dt: number): void {
-    // 정지 감지 → 스택 흔들림(작게).
-    const speed = Math.abs(this.player.velocity.z);
-    if (this.prevSpeed > GameBalance.judge.moveThreshold * 3 &&
-        speed <= GameBalance.judge.moveThreshold) {
-      this.moverView.addShake(EffectConfig.cargoShake.impulseStop);
-    }
-    this.prevSpeed = speed;
-
+    // 스택 흔들림은 이제 데이터 tilt가 소스(MoverView가 직접 반영).
     this.moverView.update(dt);
     this.seekerView.update(dt);
     this.droppedView.update();

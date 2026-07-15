@@ -120,9 +120,10 @@ if (hud) {
     const holding = input.isForward ? "전진" : "정지";
     const speed = Math.abs(player.velocity.z).toFixed(2);
     hud.textContent =
-      `무궁화 밸런스 게임 — Phase 6 (UI/Effects)\n` +
-      `[조작] 전진: Space/W/↑ (hold)  |  모드토글: Shift/E\n` +
+      `무궁화 밸런스 게임 — Phase 4rev (Balance Kick)\n` +
+      `[조작] 전진 W/Space/↑ | 균형 A·D(←→) | 모드 Shift/E\n` +
       `phase: ${RoundPhaseName[round.phase]}  mode: ${mode}  ${holding}  v=${speed}\n` +
+      `tilt: ${player.tilt.toFixed(2)}  vel: ${player.tiltVel.toFixed(2)}  warn: ${player.warnings}\n` +
       `sim: ${simSteps}  fps: ${fps}`;
   }, 250);
 }

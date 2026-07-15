@@ -1,37 +1,42 @@
 /**
- * PlayerSystem.ts
- * 무버 1명(플레이어)의 매 스텝 처리:
- *   입력 → 이동 → (급정지 낙하 판정) → 레드라이트 판정 → 완주 판정.
- * v1 싱글용 오케스트레이션. 규칙 소유는 여기, 수치는 전부 Config.
+ * PlayerSystem.ts (Phase 4 개정: Balance Kick)
+ * 무버 1명의 매 스텝 처리:
+ *   입력(W 전진 / A·D 균형) → 전진·좌우 이동 → tilt 적분 → 낙하(초과 시) → RED 판정 → 완주.
  *
- * 급정지 낙하(Phase 4):
- *   "전진 중 release" = 급정지 시도. 이때 정지 직전 속도 vStop을 정규화(=fast 최대속도 기준)해 기록하고,
- *   모드별 안정화 창(빠름 ~1.0s / 신중 ~0.3s) 동안 "낙하 판정 창"을 유지한다.
- *   창 종료 또는 완전 정지 시:  낙하수 = ceil((vStopNorm − safeSpeed) / step).
- *   → 빠름 풀스피드(norm 1.0): 2~3개, 신중 풀스피드(norm 0.5): ~1개, 안전속도 이하: 0개.
- *   실제 강체 시뮬레이션 없음 — 감속 크기(정지 직전 속도)만으로 규칙적으로 산출.
+ * 낙하는 더 이상 "급정지=무조건 낙하"가 아니다.
+ *   급정지는 tilt에 킥만 준다. 안 잡으면 tilt가 쏠려 |tilt|>threshold에서 위쪽 짐부터 떨어진다.
+ *   A/D로 되잡으면 낙하를 막을 수 있다(단 RED에선 경고 누적).
+ *
+ * RED 딜레마(승인 규칙: 옵션2 + 경고 누적):
+ *   - W 전진(속도 임계 초과) → 즉시 탈락.
+ *   - A/D 균형 보정 → 경고 +1(디바운스). 누적 ≥ warningMax → 탈락.
+ *   - 안 잡으면 짐 낙하(점수 손해, 생존 유지). → "잡히거나 vs 흘리거나"의 선택.
  */
 
 import { GameBalance } from "../config/GameBalance";
-import { PlayerConfig } from "../config/PlayerConfig";
-import { Mover, MoverStatus, SpeedMode } from "./Mover";
+import { BalanceConfig } from "../config/BalanceConfig";
+import { Mover, MoverStatus } from "./Mover";
 import { RoundStateMachine } from "./RoundStateMachine";
 import { RoundPhase } from "./RoundState";
 import { InputController } from "../input/InputController";
 import { stepMovement } from "./MovementSystem";
 import { CargoSystem } from "./CargoSystem";
-import { emitMoverCaught, emitMoverFinished } from "./GameplayEvents";
+import {
+  integrateTilt,
+  applyStopImpulse,
+  applyCounter,
+  tiltDropCount,
+  relieveAfterDrop,
+} from "./BalanceSystem";
+import {
+  emitMoverCaught,
+  emitMoverFinished,
+  emitMoverWarned,
+} from "./GameplayEvents";
 
 export class PlayerSystem {
-  // 급정지 낙하 판정 상태
   private prevHolding = false;
-  private stabilizing = false;
-  private stabTimer = 0;
-  private vStopNorm = 0;
-
-  /** vStop 정규화 기준: fast 최대속도(=norm 1.0). */
-  private readonly fastMaxSpeed =
-    PlayerConfig.baseMoveSpeed * GameBalance.speed.fast;
+  private prevPhase: RoundPhase = RoundPhase.LOBBY;
 
   constructor(
     private readonly mover: Mover,
@@ -52,22 +57,75 @@ export class PlayerSystem {
   update(dt: number): void {
     if (this.mover.status !== MoverStatus.ALIVE) return;
 
+    this.handlePhaseTransition();
+
     this.mover.speedMode = this.input.speedMode;
     const holding = this.input.isForward;
+    const lateral = this.input.lateral; // -1/0/+1
 
+    // --- 전진(z) ---
     const speed = stepMovement(this.mover, holding, dt);
 
-    // --- 급정지 낙하 판정 창 ---
-    this.updateDropWindow(holding, speed, dt);
+    // --- 급정지 킥: W를 놓는 순간 속도가 v안전 초과면 tilt에 임펄스 ---
+    if (this.prevHolding && !holding && speed > BalanceConfig.safeSpeed) {
+      applyStopImpulse(this.mover, speed);
+    }
+    this.prevHolding = holding;
 
-    // --- 레드라이트 즉시 탈락 (GREEN/TELL 이동은 정상) ---
-    if (
-      this.round.phase === RoundPhase.RED &&
-      speed > GameBalance.judge.moveThreshold
-    ) {
-      emitMoverCaught(this.mover);
-      this.round.registerActivity();
-      return;
+    // --- 좌우 이동 + counter-torque(되잡기) ---
+    if (lateral !== 0) {
+      this.moveLateral(lateral, dt);
+      applyCounter(this.mover, lateral, dt);
+    }
+
+    // --- 불안정성 적분(안 잡으면 쏠림) ---
+    integrateTilt(this.mover, dt);
+
+    // 경고 디바운스 타이머 감소(항상).
+    this.mover.warnCooldown = Math.max(0, this.mover.warnCooldown - dt);
+
+    // --- RED 판정 ---
+    if (this.round.phase === RoundPhase.RED) {
+      // (6) W 전진 이동 → 즉시 탈락
+      if (speed > GameBalance.judge.moveThreshold) {
+        console.log("[OUT] RED 전진(W) → 즉시 탈락");
+        emitMoverCaught(this.mover);
+        this.round.registerActivity();
+        return;
+      }
+      // (7) A/D 균형 보정 → 경고(디바운스: 보정 이벤트당 1회)
+      if (lateral !== 0 && this.mover.warnCooldown <= 0) {
+        this.mover.warnings += 1;
+        this.mover.warnCooldown = BalanceConfig.warningCooldown;
+        // [RED 딜레마 검증] 균형을 잡으면 낙하는 막지만 경고를 소모한다.
+        console.log(
+          `[RED-DILEMMA] 균형보정 선택 → 경고 ${this.mover.warnings}/${BalanceConfig.warningMax}` +
+            ` (짐 안 흘림, 대신 경고 소모)`,
+        );
+        emitMoverWarned(this.mover);
+        this.round.registerActivity();
+        if (this.mover.warnings >= BalanceConfig.warningMax) {
+          console.log("[OUT] 경고 누적 초과 → 탈락 (균형만 잡다 잡힘)");
+          emitMoverCaught(this.mover); // 경고 초과 탈락(잡기 보너스 적용)
+          return;
+        }
+      }
+    }
+
+    // --- 낙하: |tilt| 초과 시 위쪽 짐부터(초과량 비례) ---
+    const drops = tiltDropCount(this.mover);
+    if (drops > 0) {
+      const dropped = this.cargo.dropFrom(this.mover, drops);
+      if (dropped > 0) {
+        relieveAfterDrop(this.mover); // 스택 낮아짐 → 자기보정
+        this.round.registerActivity();
+        // [RED 딜레마 검증] RED에서 안 잡으면 짐을 흘려 생존(점수 손해).
+        if (this.round.phase === RoundPhase.RED) {
+          console.log(
+            `[RED-DILEMMA] 안 잡음 → 짐 ${dropped}개 흘림 (생존 유지, 점수 손해)`,
+          );
+        }
+      }
     }
 
     // --- 완주 판정 ---
@@ -77,51 +135,20 @@ export class PlayerSystem {
     }
   }
 
-  /**
-   * 급정지 낙하 판정 창 관리.
-   *  - 전진 중 release(속도>임계) → 창 개시, vStop 기록.
-   *  - 창 도중 다시 전진 → 급정지 취소(정지 안 함).
-   *  - 완전 정지 또는 창 만료 → 낙하수 계산 후 CargoSystem에 위임.
-   */
-  private updateDropWindow(holding: boolean, speed: number, dt: number): void {
-    const threshold = GameBalance.judge.moveThreshold;
-
-    // release 순간 감지 → 안정화(낙하 판정) 창 개시
-    if (this.prevHolding && !holding && speed > threshold && !this.stabilizing) {
-      this.stabilizing = true;
-      const isFast = this.mover.speedMode === SpeedMode.FAST;
-      this.stabTimer = isFast
-        ? GameBalance.stabilize.fast
-        : GameBalance.stabilize.careful;
-      this.vStopNorm = speed / this.fastMaxSpeed;
+  /** RED 진입 시 warningScope="red"면 경고 리셋. */
+  private handlePhaseTransition(): void {
+    const phase = this.round.phase;
+    if (phase === this.prevPhase) return;
+    if (phase === RoundPhase.RED && BalanceConfig.warningScope === "red") {
+      this.mover.warnings = 0;
     }
-
-    // 다시 전진하면 급정지 취소
-    if (this.stabilizing && holding) {
-      this.stabilizing = false;
-    }
-
-    // 창 진행 → 정지 완료 또는 만료 시 낙하 확정
-    if (this.stabilizing) {
-      this.stabTimer -= dt;
-      if (speed <= threshold || this.stabTimer <= 0) {
-        this.resolveDrop();
-        this.stabilizing = false;
-      }
-    }
-
-    this.prevHolding = holding;
+    this.prevPhase = phase;
   }
 
-  /** 낙하수 = ceil((vStopNorm − safeSpeed) / step). 보유량으로 상한. */
-  private resolveDrop(): void {
-    const { safeSpeed, step } = GameBalance.dropModel;
-    const raw = Math.ceil((this.vStopNorm - safeSpeed) / step);
-    const drops = Math.max(0, Math.min(raw, this.mover.cargo));
-    if (drops <= 0) return;
-
-    const dropped = this.cargo.dropFrom(this.mover, drops);
-    // 낙하도 RED 중 '활동'이면 빈 턴 아님(그린타임 반환 방지).
-    if (dropped > 0) this.round.registerActivity();
+  private moveLateral(dir: number, dt: number): void {
+    this.mover.position.x += dir * BalanceConfig.lateralMoveSpeed * dt;
+    const half = GameBalance.track.laneHalfWidth;
+    if (this.mover.position.x > half) this.mover.position.x = half;
+    else if (this.mover.position.x < -half) this.mover.position.x = -half;
   }
 }
