@@ -119,7 +119,7 @@ export const BalanceConfig: BalanceConfigShape = {
   settleAssist: 1.0, // 스프링 복원 하향(진동 감소)
   centerDeadzone: 0.06,
 
-  leanDriftGain: 6.0, // 주력: 지속 방향 쏠림
+  leanDriftGain: 8.0, // 주력: 지속 방향 쏠림(가만히 직진하면 ~1초 내 눈에 띄게 쏠려 위험)
   leanDirChangeRate: 0.5, // 방향은 서서히 전환(저주파)
   driftMax: 1.0,
   speedLeanScale: 0.8,

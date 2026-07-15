@@ -78,8 +78,10 @@ export function integrateTilt(
   mover.tiltVel -= mover.tiltVel * damp * dt;
   mover.tilt += mover.tiltVel * dt;
 
-  // 데드존: 중심 근처 저속이면 미세 떨림을 적극 감쇠(완전 정지는 아님).
+  // 데드존 스냅은 "정지 시에만"(braceAmt 높을 때) — 이동 중엔 중앙 attractor 금지.
+  //  이동 중에는 leanDrift+instability가 살아 가만두면 쏠려 낙하해야 하므로 센터링을 하지 않는다.
   if (
+    braceAmt > 0.5 &&
     Math.abs(mover.tilt) < BalanceConfig.centerDeadzone &&
     Math.abs(mover.tiltVel) < BalanceConfig.centerDeadzone
   ) {

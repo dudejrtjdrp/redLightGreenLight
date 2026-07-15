@@ -26,7 +26,6 @@ import {
   integrateTilt,
   applyStopImpulse,
   applyCounter,
-  applySettleAssist,
   applyWalkSway,
   updateDangerState,
   tiltDropCount,
@@ -93,10 +92,7 @@ export class PlayerSystem {
     const fwdSpeed = Math.abs(this.mover.velocity.z);
     const moveFactor = Math.min(1, fwdSpeed / PlayerConfig.baseMoveSpeed);
 
-    // --- 입력 중립 시 약한 settle-assist(이동 중에만; 정지 시엔 홀드 유지) ---
-    if (rawLateral === 0 && moveFactor > 0.05) {
-      applySettleAssist(this.mover, dt);
-    }
+    // (이동 중 자동 중앙복원 없음: settleAssist 제거 → 가만두면 leanDrift로 쏠려 낙하)
 
     // --- 걸음 커플 좌우 sway(직진해도 흔들림). 전진 거리로 스텝 위상 누적. ---
     this.balanceStepPhase +=
