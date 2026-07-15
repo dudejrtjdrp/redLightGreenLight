@@ -27,6 +27,7 @@ import {
   applyStopImpulse,
   applyCounter,
   applySettleAssist,
+  applyWalkSway,
   updateDangerState,
   tiltDropCount,
   relieveAfterDrop,
@@ -42,6 +43,8 @@ export class PlayerSystem {
   private prevPhase: RoundPhase = RoundPhase.LOBBY;
   /** 스무딩된 좌우 입력(연속). 급격한 튐 방지. */
   private smoothLateral = 0;
+  /** 걸음 커플 sway용 스텝 위상(전진 거리 누적 기반). */
+  private balanceStepPhase = 0;
 
   constructor(
     private readonly mover: Mover,
@@ -86,17 +89,21 @@ export class PlayerSystem {
     this.moveLateral(this.smoothLateral, dt);
     applyCounter(this.mover, this.smoothLateral, dt);
 
-    // --- 입력 중립 시 약한 settle-assist(자동복구는 아님) ---
-    if (rawLateral === 0) {
+    // 정규화 전진속도(0=정지 → 얼어붙음, 1=최대 → 최대 흔들림).
+    const fwdSpeed = Math.abs(this.mover.velocity.z);
+    const moveFactor = Math.min(1, fwdSpeed / PlayerConfig.baseMoveSpeed);
+
+    // --- 입력 중립 시 약한 settle-assist(이동 중에만; 정지 시엔 홀드 유지) ---
+    if (rawLateral === 0 && moveFactor > 0.05) {
       applySettleAssist(this.mover, dt);
     }
 
-    // --- 불안정성 적분(이동 비례, 정지 시 브레이스 복원) ---
-    // 정규화 전진속도(0=정지 → 브레이스로 안정, 1=최대 → 최대 불안정).
-    const moveFactor = Math.min(
-      1,
-      Math.abs(this.mover.velocity.z) / PlayerConfig.baseMoveSpeed,
-    );
+    // --- 걸음 커플 좌우 sway(직진해도 흔들림). 전진 거리로 스텝 위상 누적. ---
+    this.balanceStepPhase +=
+      ((fwdSpeed * dt) / BalanceConfig.walkStride) * Math.PI * 2;
+    applyWalkSway(this.mover, this.balanceStepPhase, moveFactor, dt);
+
+    // --- 불안정성 적분(이동 비례; 정지 시 tiltVel 감쇠로 그 자리 홀드) ---
     integrateTilt(this.mover, dt, moveFactor);
     // 아슬아슬(danger) 상태 갱신(히스테리시스). 낙하는 이보다 큰 tiltDropThreshold에서만.
     updateDangerState(this.mover);

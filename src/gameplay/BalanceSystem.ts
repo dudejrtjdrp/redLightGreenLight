@@ -57,13 +57,13 @@ export function integrateTilt(mover: Mover, dt: number, moveFactor: number): voi
       (Math.random() * 2 - 1) * BalanceConfig.instabilityNoise * activity * dt;
   }
 
-  // 정지 브레이스: tilt를 중심으로 강하게 되돌림(멈추면 능동적으로 균형 회복).
-  mover.tiltVel -= BalanceConfig.braceRestoreGain * mover.tilt * braceAmt * dt;
-
-  // 감쇠(마찰). danger 구간에선 추가 감쇠로 가장자리에 머물게("어어어").
-  const damp = mover.inDanger
+  // 감쇠(마찰) + danger 추가 감쇠 + 정지 감쇠.
+  //  정지(braceAmt↑) 시 tiltVel만 강하게 죽여 진동을 멈춘다 → tilt 값은 그 자리 홀드.
+  //  ※ 중앙(tilt=0)으로 당기는 항은 없음(제자리 고정, 스냅 금지).
+  let damp = mover.inDanger
     ? BalanceConfig.damping + BalanceConfig.dangerDamping
     : BalanceConfig.damping;
+  damp += BalanceConfig.stopDamping * braceAmt;
   mover.tiltVel -= mover.tiltVel * damp * dt;
   mover.tilt += mover.tiltVel * dt;
 
@@ -82,6 +82,25 @@ export function integrateTilt(mover: Mover, dt: number, moveFactor: number): voi
 /** 입력 중립 시 중심으로 끌어오는 약한 복원(settle-assist). 완전 자동복구는 아님. */
 export function applySettleAssist(mover: Mover, dt: number): void {
   mover.tiltVel -= BalanceConfig.settleAssist * mover.tilt * dt;
+}
+
+/**
+ * 걸음 커플 좌우 sway 임펄스: 발 디딜 때마다 무게중심이 좌↔우로 이동.
+ * 이동속도(moveFactor)에 비례 → 빠를수록 크게 흔들림. 정지 시(moveFactor≈0) 무효.
+ * @param stepPhase 전진 거리 기반 스텝 위상(라디안).
+ */
+export function applyWalkSway(
+  mover: Mover,
+  stepPhase: number,
+  moveFactor: number,
+  dt: number,
+): void {
+  mover.tiltVel +=
+    Math.sin(stepPhase) *
+    BalanceConfig.walkSwayGain *
+    BalanceConfig.walkSwayStepCoupling *
+    Math.max(0, Math.min(1, moveFactor)) *
+    dt;
 }
 
 /**

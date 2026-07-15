@@ -29,13 +29,22 @@ export interface BalanceConfigShape {
   /** 낙하 짐이 바깥으로 밀려나 착지하는 수평 거리(회수 위치 = 착지점). */
   dropLandingSpread: number;
 
-  /** 정지 시 스택을 중심(tilt=0)으로 되돌리는 강한 능동 복원력(브레이스). */
-  braceRestoreGain: number;
+  /**
+   * 정지 시 tiltVel 감쇠율(braceAmt에 비례). 진동만 멈추고 tilt 값은 그 자리 유지
+   * = 멈춘 자세로 얼어붙음. 중앙(tilt=0)으로 스냅하지 않음.
+   */
+  stopDamping: number;
   /**
    * 이동량(정규화 전진속도) → 불안정/드리프트 계수.
    * 멈추면 불안정≈0, 움직일 때만 흔들리게. (activity = min(1, moveFactor*이 값))
    */
   moveInstabilityScale: number;
+  /** 걸음 커플 좌우 sway 임펄스 크기(직진해도 흔들리게). */
+  walkSwayGain: number;
+  /** sway의 발걸음 연동 강도. */
+  walkSwayStepCoupling: number;
+  /** sway 스텝 위상 1사이클(2π)당 전진 거리(유닛). */
+  walkStride: number;
 
   /** 불안정 양성 피드백 계수(안 잡으면 쏠려 넘어감). */
   instabilityGain: number;
@@ -89,8 +98,11 @@ export const BalanceConfig: BalanceConfigShape = {
   tiltReliefFactor: 0.45,
   dropLandingSpread: 0.8,
 
-  braceRestoreGain: 8.0,
+  stopDamping: 9.0,
   moveInstabilityScale: 1.6,
+  walkSwayGain: 4.5,
+  walkSwayStepCoupling: 1.0,
+  walkStride: 0.9,
 
   instabilityGain: 2.0,
   instabilityNoise: 0.5,

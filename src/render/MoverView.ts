@@ -273,8 +273,9 @@ export class MoverView {
     const bounce = Math.abs(Math.sin(this.walkPhase)) * w.bounce * this.gait;
     const sway = Math.sin(this.walkPhase) * w.sway * this.gait;
     const bal = VisualConfig.balance;
-    let lean =
-      this.mover.tilt * (bal.leanScale * this.gait - bal.braceLeanScale * braceAmt);
+    // 정지 시에도 tilt 방향으로 lean 유지 → 크게 기운 채 멈추면 그 아슬아슬한 자세로 홀드.
+    // (카운터-린 제거: 중앙으로 되돌리지 않음)
+    let lean = this.mover.tilt * bal.leanScale;
     const ml = bal.maxLean;
     if (lean > ml) lean = ml;
     else if (lean < -ml) lean = -ml;
