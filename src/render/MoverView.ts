@@ -1,15 +1,18 @@
 /**
- * MoverView.ts
- * 무버 = 귀여운 로우폴리 카멜레온. Three.js 프리미티브 조합(외부 모델 없음).
+ * MoverView.ts (Phase 8 개정)
+ * 무버 = 새하얀·매끈한 이족보행 휴머노이드(MECCHA CHAMELEON 풍). 도마뱀 폐기.
+ * 외부 모델 없이 프리미티브 + 간단 본 계층 + 단일 phase 절차 애니메이션.
  *
  * 성능:
- *  - 지오메트리는 모듈 스코프에서 공유(SHARED) → 무버 여러 명이어도 지오 재사용.
- *  - 색 바뀌는 몸통 머티리얼만 인스턴스별 소유. 나머지는 공유. 매 프레임 new 없음.
+ *  - 지오메트리 공유(SHARED). 몸 전체는 인스턴스별 bodyMat 하나로 틴트(부위별 머티리얼 X).
+ *  - 워크는 이동거리 기반 단일 phase 스칼라로 구동 → 매 프레임 new/할당 없음.
  *
- * 아트=가독성:
- *  - 색-상태: GREEN 초록 / TELL 초록→빨강 lerp / RED 빨강+눈 크게 / 탈락 굳음+눈 뱅글.
- *  - 스택 기울기: 데이터 mover.tilt 를 소스로(Phase 4 개정). 윗짐이 늦게 따라오는 채찍 효과.
- *  - 경고 플래시: mover:warned 때 흰색 순간 발광.
+ * 애니:
+ *  - 두 팔은 앞으로 고정된 캐리 포즈, 짐 스택을 두 손 위에 받침.
+ *  - 다리 스윙 + 상하 바운스 + 몸통 sway로 걷는 느낌. 워크 속도 = 이동속도 연동(시간 아님).
+ *  - RED 정지 시 idle/brace, A/D 균형(tilt)로 몸통 좌우 무게중심 이동.
+ *  - 색: 흰 몸 + 상태 틴트 lerp(GREEN 초록 → TELL 빨강 → RED 빨강/경직, 탈락 짙은 빨강).
+ *  - 짐 스택은 tilt로 수평 전단(바닥 피벗 회전 없음).
  */
 
 import * as THREE from "three";
@@ -17,127 +20,102 @@ import { Mover, MoverStatus, SpeedMode } from "../gameplay/Mover";
 import { RoundPhase } from "../gameplay/RoundState";
 import { ItemConfig } from "../config/ItemConfig";
 import { ArtConfig } from "../config/ArtConfig";
+import { VisualConfig } from "../config/VisualConfig";
+
+const TWO_PI = Math.PI * 2;
+const ARM_BASE = -1.15; // 어깨를 앞으로 들어올린 캐리 포즈 기준각
 
 // --- 공유 지오메트리(로우폴리) ---
-const SHARED = {
-  body: new THREE.SphereGeometry(1, 12, 10),
-  eye: new THREE.SphereGeometry(1, 10, 8),
-  pupil: new THREE.SphereGeometry(1, 8, 6),
-  leg: new THREE.CylinderGeometry(0.07, 0.05, 0.34, 6),
-  tail: new THREE.SphereGeometry(1, 8, 6),
+const G = {
+  head: new THREE.SphereGeometry(0.2, 14, 12),
+  torso: new THREE.CylinderGeometry(0.2, 0.27, 0.55, 12),
+  limb: new THREE.CylinderGeometry(0.075, 0.065, 0.4, 8),
+  hand: new THREE.SphereGeometry(0.1, 8, 6),
+  foot: new THREE.BoxGeometry(0.16, 0.08, 0.26),
   cargo: new THREE.BoxGeometry(
     ItemConfig.visualSize * 2,
     ItemConfig.stackGap * 0.9,
     ItemConfig.visualSize * 2,
   ),
 };
+const MAT_CARGO = new THREE.MeshStandardMaterial({ color: 0xffcc44, roughness: 0.7 });
 
-// --- 공유 머티리얼(색 안 바뀌는 부위) ---
-const MAT = {
-  eye: new THREE.MeshStandardMaterial({ color: ArtConfig.chameleon.eye, roughness: 0.3 }),
-  pupil: new THREE.MeshStandardMaterial({ color: ArtConfig.chameleon.pupil, roughness: 0.4 }),
-  leg: new THREE.MeshStandardMaterial({ color: ArtConfig.chameleon.leg, roughness: 0.7 }),
-  tail: new THREE.MeshStandardMaterial({ color: ArtConfig.chameleon.tail, roughness: 0.6 }),
-  cargo: new THREE.MeshStandardMaterial({ color: 0xffcc44, roughness: 0.7 }),
-};
-
-const BODY_SCALE = new THREE.Vector3(0.42, 0.4, 0.62);
+interface Leg {
+  hip: THREE.Group;
+  knee: THREE.Group;
+}
 
 export class MoverView {
   readonly group: THREE.Group;
 
-  private readonly body: THREE.Mesh;
+  private readonly bodyPivot: THREE.Group;
   private readonly bodyMat: THREE.MeshStandardMaterial;
-  private readonly eyePivots: THREE.Group[] = [];
+  private readonly legs: Leg[] = [];
+  private readonly armPivots: THREE.Group[] = [];
   private readonly stack: THREE.Group;
   private readonly boxes: THREE.Mesh[] = [];
 
-  // 스택 시각 tilt(데이터 tilt를 lag로 따라감), 플린치, 경고 플래시
+  // 절차 애니 상태
+  private walkPhase = 0;
+  private gait = 0;
+  private prevX = 0;
+  private prevZ = 0;
   private visTilt = 0;
   private flinchEnergy = 0;
   private flashEnergy = 0;
 
-  // 색-상태 lerp (in-place)
+  // 색 lerp(in-place)
   private readonly curColor: THREE.Color;
   private readonly curEmissive: THREE.Color;
-  private readonly targetColor = new THREE.Color(ArtConfig.chameleon.bodyGreen);
-  private readonly targetEmissive = new THREE.Color(ArtConfig.chameleon.emissiveGreen);
+  private readonly targetColor: THREE.Color;
+  private readonly targetEmissive: THREE.Color;
 
   private phase: RoundPhase = RoundPhase.GREEN;
-  private eyeScale = ArtConfig.chameleon.eyeScaleCalm;
-
   private readonly shadows = ArtConfig.scene.shadows;
 
   constructor(private readonly mover: Mover) {
+    const h = VisualConfig.humanoid;
     this.group = new THREE.Group();
-    const c = ArtConfig.chameleon;
+    this.prevX = mover.position.x;
+    this.prevZ = mover.position.z;
 
-    this.curColor = new THREE.Color(c.bodyGreen);
-    this.curEmissive = new THREE.Color(c.emissiveGreen);
+    this.curColor = new THREE.Color(h.bodyGreen);
+    this.curEmissive = new THREE.Color(h.emissiveGreen);
+    this.targetColor = new THREE.Color(h.bodyGreen);
+    this.targetEmissive = new THREE.Color(h.emissiveGreen);
 
     this.bodyMat = new THREE.MeshStandardMaterial({
       color: this.curColor.clone(),
       emissive: this.curEmissive.clone(),
-      roughness: 0.55,
+      roughness: 0.4,
+      metalness: 0.0,
     });
-    this.body = new THREE.Mesh(SHARED.body, this.bodyMat);
-    this.body.scale.copy(BODY_SCALE);
-    this.body.position.y = 0.42;
-    this.setShadow(this.body);
-    this.group.add(this.body);
 
-    // 눈 2개(pivot으로 뱅글 회전).
-    for (const sx of [-1, 1]) {
-      const pivot = new THREE.Group();
-      pivot.position.set(sx * 0.2, 0.62, 0.34);
-      const ball = new THREE.Mesh(SHARED.eye, MAT.eye);
-      ball.scale.setScalar(0.17);
-      this.setShadow(ball);
-      pivot.add(ball);
-      const pupil = new THREE.Mesh(SHARED.pupil, MAT.pupil);
-      pupil.scale.setScalar(0.08);
-      pupil.position.set(sx * 0.05, 0.02, 0.13);
-      pivot.add(pupil);
-      this.group.add(pivot);
-      this.eyePivots.push(pivot);
-    }
+    // 다리(발은 group 직속 → 상체가 바운스해도 발은 고정).
+    for (const sx of [-1, 1]) this.legs.push(this.buildLeg(sx));
 
-    // 다리 4개.
-    for (const [lx, lz] of [
-      [-0.24, 0.3],
-      [0.24, 0.3],
-      [-0.24, -0.28],
-      [0.24, -0.28],
-    ] as const) {
-      const leg = new THREE.Mesh(SHARED.leg, MAT.leg);
-      leg.position.set(lx, 0.14, lz);
-      leg.rotation.z = lx < 0 ? 0.3 : -0.3;
-      this.setShadow(leg);
-      this.group.add(leg);
-    }
+    // 상체(바운스/sway/lean 담당).
+    this.bodyPivot = new THREE.Group();
+    this.group.add(this.bodyPivot);
 
-    // 말린 꼬리.
-    const segs = 6;
-    for (let i = 0; i < segs; i++) {
-      const t = i / (segs - 1);
-      const seg = new THREE.Mesh(SHARED.tail, MAT.tail);
-      seg.scale.setScalar(0.12 * (1 - t * 0.6));
-      const angle = t * Math.PI * 1.4;
-      seg.position.set(
-        0,
-        0.35 + Math.sin(angle) * 0.18 * t,
-        -0.5 - Math.cos(angle) * 0.22 - t * 0.05,
-      );
-      this.setShadow(seg);
-      this.group.add(seg);
-    }
+    const pelvis = this.mesh(G.torso, 0, 0.62);
+    pelvis.scale.set(0.9, 0.5, 0.9);
+    this.bodyPivot.add(pelvis);
 
-    // 짐 스택.
+    const torso = this.mesh(G.torso, 0, 0.95);
+    this.bodyPivot.add(torso);
+
+    const head = this.mesh(G.head, 0, 1.32);
+    this.bodyPivot.add(head);
+
+    for (const sx of [-1, 1]) this.armPivots.push(this.buildArm(sx));
+
+    // 짐 스택(두 손 위, 앞쪽).
     this.stack = new THREE.Group();
-    this.stack.position.set(0, 0.72, -0.02);
-    this.group.add(this.stack);
+    this.stack.position.set(0, 1.04, 0.34);
+    this.bodyPivot.add(this.stack);
     for (let i = 0; i < ItemConfig.maxPerPlayer; i++) {
-      const b = new THREE.Mesh(SHARED.cargo, MAT.cargo);
+      const b = new THREE.Mesh(G.cargo, MAT_CARGO);
       b.position.y = i * ItemConfig.stackGap + ItemConfig.stackGap * 0.5;
       b.visible = false;
       this.setShadow(b);
@@ -146,52 +124,110 @@ export class MoverView {
     }
   }
 
+  private buildLeg(sx: number): Leg {
+    const hip = new THREE.Group();
+    hip.position.set(sx * 0.11, 0.6, 0);
+    const thigh = this.mesh(G.limb, 0, -0.18);
+    thigh.scale.set(1, 0.9, 1);
+    hip.add(thigh);
+    const knee = new THREE.Group();
+    knee.position.y = -0.36;
+    hip.add(knee);
+    const shin = this.mesh(G.limb, 0, -0.16);
+    shin.scale.set(0.9, 0.8, 0.9);
+    knee.add(shin);
+    const foot = new THREE.Mesh(G.foot, this.bodyMat);
+    foot.position.set(0, -0.32, 0.05);
+    this.setShadow(foot);
+    knee.add(foot);
+    this.group.add(hip);
+    return { hip, knee };
+  }
+
+  private buildArm(sx: number): THREE.Group {
+    const sh = new THREE.Group();
+    sh.position.set(sx * 0.26, 1.12, 0);
+    sh.rotation.x = ARM_BASE;
+    const upper = this.mesh(G.limb, 0, -0.16);
+    upper.scale.set(0.85, 0.8, 0.85);
+    sh.add(upper);
+    const elbow = new THREE.Group();
+    elbow.position.y = -0.32;
+    elbow.rotation.x = -0.55; // 팔뚝을 앞으로
+    sh.add(elbow);
+    const fore = this.mesh(G.limb, 0, -0.15);
+    fore.scale.set(0.8, 0.75, 0.8);
+    elbow.add(fore);
+    const hand = new THREE.Mesh(G.hand, this.bodyMat);
+    hand.position.set(0, -0.3, 0);
+    this.setShadow(hand);
+    elbow.add(hand);
+    this.bodyPivot.add(sh);
+    return sh;
+  }
+
+  /** 공유 bodyMat 메쉬 헬퍼. */
+  private mesh(geo: THREE.BufferGeometry, x: number, y: number): THREE.Mesh {
+    const m = new THREE.Mesh(geo, this.bodyMat);
+    m.position.set(x, y, 0);
+    this.setShadow(m);
+    return m;
+  }
+
   private setShadow(m: THREE.Mesh): void {
     if (this.shadows) m.castShadow = true;
   }
 
   setPhase(phase: RoundPhase): void {
     this.phase = phase;
-    const c = ArtConfig.chameleon;
+    const h = VisualConfig.humanoid;
     const danger = phase === RoundPhase.TELL || phase === RoundPhase.RED;
-    this.targetColor.setHex(danger ? c.bodyRed : c.bodyGreen);
-    this.targetEmissive.setHex(danger ? c.emissiveRed : c.emissiveGreen);
+    this.targetColor.setHex(danger ? h.bodyRed : h.bodyGreen);
+    this.targetEmissive.setHex(danger ? h.emissiveRed : h.emissiveGreen);
   }
 
-  /** 낙하 시 몸통 움찔(스쿼시). */
   addFlinch(impulse: number): void {
     this.flinchEnergy = Math.min(1, this.flinchEnergy + impulse);
   }
 
-  /** 경고 시 흰색 플래시. */
   flash(impulse: number): void {
     this.flashEnergy = Math.min(1, this.flashEnergy + impulse);
   }
 
   update(dt: number): void {
-    const c = ArtConfig.chameleon;
+    const h = VisualConfig.humanoid;
+    const w = VisualConfig.walk;
     const caught = this.mover.status === MoverStatus.CAUGHT;
 
-    // 위치 동기화 + 전진 방향(-z)을 향하도록 180도.
+    // 위치 + 전진 방향(-z).
     this.group.position.x = this.mover.position.x;
     this.group.position.z = this.mover.position.z;
     this.group.rotation.y = Math.PI;
 
-    // --- 색-상태 lerp ---
+    // 이동거리 → 워크 phase(시간 아님).
+    const dx = this.mover.position.x - this.prevX;
+    const dz = this.mover.position.z - this.prevZ;
+    this.prevX = this.mover.position.x;
+    this.prevZ = this.mover.position.z;
+    const dist = Math.hypot(dx, dz);
+    const speed = dist / Math.max(dt, 1e-4);
+    if (!caught) this.walkPhase += (dist / w.stride) * TWO_PI;
+    const moving = !caught && speed > w.moveEps;
+    this.gait += ((moving ? 1 : 0) - this.gait) * Math.min(1, w.gaitLerp * dt);
+
+    // --- 색 틴트 lerp ---
     if (caught) {
-      this.targetColor.setHex(c.bodyCaught);
-      this.targetEmissive.setHex(c.emissiveCaught);
+      this.targetColor.setHex(h.bodyCaught);
+      this.targetEmissive.setHex(h.emissiveCaught);
     } else if (this.mover.status === MoverStatus.FINISHED) {
-      this.targetColor.setHex(c.bodyGreen);
-      this.targetEmissive.setHex(c.emissiveGreen);
+      this.targetColor.setHex(h.bodyGreen);
+      this.targetEmissive.setHex(h.emissiveGreen);
     }
-    const t = Math.min(1, c.colorLerpSpeed * dt);
+    const t = Math.min(1, h.colorLerpSpeed * dt);
     this.curColor.lerp(this.targetColor, t);
     this.curEmissive.lerp(this.targetEmissive, t);
     this.bodyMat.color.copy(this.curColor);
     this.bodyMat.emissive.copy(this.curEmissive);
-
-    // 경고 플래시(흰색 가산).
     if (this.flashEnergy > 0) {
       this.flashEnergy = Math.max(
         0,
@@ -199,51 +235,56 @@ export class MoverView {
       );
       this.bodyMat.emissive.addScalar(this.flashEnergy * ArtConfig.warnFlash.strength);
     }
-
     this.bodyMat.emissiveIntensity =
-      this.mover.speedMode === SpeedMode.FAST && !caught ? 1.15 : 0.85;
+      this.mover.speedMode === SpeedMode.FAST && !caught ? 1.1 : 0.85;
 
-    // --- 눈: RED/탈락 크게, 탈락 뱅글 ---
-    const alert = caught || this.phase === RoundPhase.RED;
-    const targetEye = alert ? c.eyeScaleAlert : c.eyeScaleCalm;
-    this.eyeScale += (targetEye - this.eyeScale) * t;
-    for (let i = 0; i < this.eyePivots.length; i++) {
-      const p = this.eyePivots[i];
-      p.scale.setScalar(this.eyeScale);
-      if (caught) p.rotation.z += (i === 0 ? 1 : -1) * c.eyeSpinSpeed * dt;
-    }
+    // --- 다리 스윙 ---
+    const sw = Math.sin(this.walkPhase);
+    const sw2 = Math.sin(this.walkPhase + Math.PI);
+    this.legs[0].hip.rotation.x = sw * w.legSwing * this.gait;
+    this.legs[1].hip.rotation.x = sw2 * w.legSwing * this.gait;
+    this.legs[0].knee.rotation.x = Math.max(0, -sw) * w.kneeBend * this.gait;
+    this.legs[1].knee.rotation.x = Math.max(0, -sw2) * w.kneeBend * this.gait;
 
-    // --- 짐 개수 표시 ---
-    for (let i = 0; i < this.boxes.length; i++) {
-      this.boxes[i].visible = i < this.mover.cargo;
-    }
+    // --- 상체 바운스 + sway + 무게중심(tilt) lean ---
+    const bounce = Math.abs(Math.sin(this.walkPhase)) * w.bounce * this.gait;
+    const sway = Math.sin(this.walkPhase) * w.sway * this.gait;
+    let lean = this.mover.tilt * VisualConfig.balance.leanScale;
+    const ml = VisualConfig.balance.maxLean;
+    if (lean > ml) lean = ml;
+    else if (lean < -ml) lean = -ml;
+    const brace = this.phase === RoundPhase.RED && this.gait < 0.5 ? w.braceCrouch : 0;
 
-    // --- 스택 기울기: 데이터 tilt를 lag로 따라감 → 전단(shear)으로 표현 ---
-    // 바닥 한 점 피벗 회전 금지. 높이 인덱스에 비례한 가로 오프셋으로 "위로 갈수록 밀림".
-    const st = ArtConfig.stackTilt;
-    this.visTilt += (this.mover.tilt - this.visTilt) * Math.min(1, st.follow * dt);
-    this.stack.rotation.z = 0; // 회전 제거
-    for (let i = 0; i < this.boxes.length; i++) {
-      let x = this.visTilt * st.shearPerLevel * i; // i=바닥(0) → 안 밀림, 위일수록 큼
-      if (x > st.maxShear) x = st.maxShear;
-      else if (x < -st.maxShear) x = -st.maxShear;
-      this.boxes[i].position.x = x;
-    }
+    // --- 팔 캐리 포즈 + 미세 bob ---
+    const bob = Math.sin(this.walkPhase * 2) * w.armBob * this.gait;
+    this.armPivots[0].rotation.x = ARM_BASE + bob;
+    this.armPivots[1].rotation.x = ARM_BASE - bob;
 
-    // --- 플린치(몸통 스쿼시) ---
+    // --- 플린치(상체 스쿼시) ---
+    let sx = 1;
+    let sy = 1;
     if (this.flinchEnergy > 0) {
       this.flinchEnergy = Math.max(
         0,
         this.flinchEnergy - ArtConfig.flinch.decayPerSec * dt,
       );
       const s = this.flinchEnergy * ArtConfig.flinch.scale;
-      this.body.scale.set(
-        BODY_SCALE.x * (1 + s),
-        BODY_SCALE.y * (1 - s),
-        BODY_SCALE.z * (1 + s),
-      );
-    } else {
-      this.body.scale.copy(BODY_SCALE);
+      sx = 1 + s;
+      sy = 1 - s;
+    }
+    this.bodyPivot.position.y = bounce - brace;
+    this.bodyPivot.rotation.z = sway + lean;
+    this.bodyPivot.scale.set(sx, sy, sx);
+
+    // --- 짐 개수 표시 + tilt 수평 전단(바닥 피벗 회전 없음) ---
+    const st = ArtConfig.stackTilt;
+    this.visTilt += (this.mover.tilt - this.visTilt) * Math.min(1, st.follow * dt);
+    for (let i = 0; i < this.boxes.length; i++) {
+      this.boxes[i].visible = i < this.mover.cargo;
+      let ox = this.visTilt * st.shearPerLevel * i;
+      if (ox > st.maxShear) ox = st.maxShear;
+      else if (ox < -st.maxShear) ox = -st.maxShear;
+      this.boxes[i].position.x = ox;
     }
   }
 }
