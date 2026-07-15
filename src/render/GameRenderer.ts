@@ -13,6 +13,7 @@ import { EffectSystem } from "./EffectSystem";
 import { gameBus } from "../core/EventBus";
 import { GameBalance } from "../config/GameBalance";
 import { EffectConfig } from "../config/EffectConfig";
+import { ArtConfig } from "../config/ArtConfig";
 import { RoundPhase } from "../gameplay/RoundState";
 import { Mover } from "../gameplay/Mover";
 import { CargoSystem } from "../gameplay/CargoSystem";
@@ -24,6 +25,10 @@ export class GameRenderer {
   private readonly droppedView: DroppedItemsView;
   private readonly effects: EffectSystem;
   private prevSpeed = 0;
+
+  // 스크린셰이크 상태
+  private shakeEnergy = 0;
+  private shakeTime = 0;
 
   constructor(
     private readonly sceneManager: SceneManager,
@@ -41,12 +46,28 @@ export class GameRenderer {
     scene.add(this.droppedView.group);
     scene.add(this.effects.group);
 
-    // 술래 회전은 페이즈 따라, 짐 스택 흔들림은 낙하 시.
-    gameBus.on("phase:change", ({ to }) => this.seekerView.setPhase(to));
-    gameBus.on("item:dropped", () =>
-      this.moverView.addShake(EffectConfig.cargoShake.impulseDrop),
+    // 페이즈 → 술래 회전 + 카멜레온 색 변화.
+    gameBus.on("phase:change", ({ to }) => {
+      this.seekerView.setPhase(to);
+      this.moverView.setPhase(to);
+    });
+    // 낙하 주스: 스택 흔들림 + 카멜레온 움찔 + 스크린셰이크.
+    gameBus.on("item:dropped", () => {
+      this.moverView.addShake(EffectConfig.cargoShake.impulseDrop);
+      this.moverView.addFlinch(ArtConfig.flinch.dropImpulse);
+      this.addScreenShake(ArtConfig.screenShake.dropEnergy);
+    });
+    // 탈락 주스: 스크린셰이크(카멜레온 굳음/눈 뱅글은 MoverView가 status로 처리).
+    gameBus.on("mover:caught", () =>
+      this.addScreenShake(ArtConfig.screenShake.caughtEnergy),
     );
+
     this.seekerView.setPhase(RoundPhase.GREEN);
+    this.moverView.setPhase(RoundPhase.GREEN);
+  }
+
+  private addScreenShake(energy: number): void {
+    this.shakeEnergy = Math.min(1, this.shakeEnergy + energy);
   }
 
   update(dt: number): void {
@@ -63,15 +84,32 @@ export class GameRenderer {
     this.droppedView.update();
     this.effects.update(dt);
 
+    // 스크린셰이크 감쇠.
+    if (this.shakeEnergy > 0) {
+      this.shakeTime += dt;
+      this.shakeEnergy = Math.max(
+        0,
+        this.shakeEnergy - ArtConfig.screenShake.decayPerSec * dt,
+      );
+    }
+
     this.followCamera();
   }
 
-  /** 카메라가 무버를 뒤에서 추적. */
+  /** 카메라가 무버를 뒤에서 추적 + 스크린셰이크 오프셋. */
   private followCamera(): void {
     const cam = this.sceneManager.camera;
     const c = EffectConfig.camera;
-    cam.position.x = 0;
-    cam.position.y = c.height;
+    const ss = ArtConfig.screenShake;
+    let ox = 0;
+    let oy = 0;
+    if (this.shakeEnergy > 0) {
+      const a = this.shakeEnergy * ss.maxOffset;
+      ox = Math.sin(this.shakeTime * ss.freq) * a;
+      oy = Math.cos(this.shakeTime * ss.freq * 1.3) * a * 0.6;
+    }
+    cam.position.x = ox;
+    cam.position.y = c.height + oy;
     cam.position.z = this.player.position.z + c.back;
     cam.lookAt(0, 0.6, this.player.position.z - c.lookAhead);
   }

@@ -6,19 +6,25 @@
     <title>무궁화 밸런스 게임</title>
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
-      html, body { width: 100%; height: 100%; overflow: hidden; background: #0b0d12; }
+      html, body { width: 100%; height: 100%; overflow: hidden; background: #9ec9e8; }
       #app { position: fixed; inset: 0; }
       canvas { display: block; }
+      /* 가벼운 포스트: CSS 비네트(GL 포스트프로세싱 없이 저비용). */
+      #vignette {
+        position: fixed; inset: 0; pointer-events: none; z-index: 5;
+        box-shadow: inset 0 0 220px rgba(20, 40, 30, 0.38);
+      }
       #hud {
         position: fixed; top: 12px; left: 12px;
         font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace;
-        color: #9fe870; pointer-events: none; white-space: pre;
-        text-shadow: 0 1px 2px #000;
+        color: #12352a; pointer-events: none; white-space: pre; z-index: 10;
+        text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
       }
     </style>
   </head>
   <body>
     <div id="app"></div>
+    <div id="vignette"></div>
     <div id="hud"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
