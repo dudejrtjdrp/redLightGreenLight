@@ -44,7 +44,6 @@ export class GameRenderer {
   private shakeEnergy = 0;
   private shakeTime = 0;
   private readonly scratch = new THREE.Vector3();
-  private map: MapView | null = null;
 
   constructor(
     private readonly sceneManager: SceneManager,
@@ -88,9 +87,8 @@ export class GameRenderer {
     // KayKit glb 비동기 로드 → 성공 시 절차적 아바타를 교체.
     void this.tryLoadCharacter(moverView);
     // 맵(도로) 비동기 로드 → 실패 시 바닥 플레이스홀더 유지.
-    void MapView.create(sceneManager.scene).then((m) => {
-      this.map = m;
-    });
+    // MapView.create()가 성공 시 scene에 직접 group을 add하므로 참조 보관은 불필요.
+    void MapView.create(sceneManager.scene);
   }
 
   private async tryLoadCharacter(fallback: MoverView): Promise<void> {

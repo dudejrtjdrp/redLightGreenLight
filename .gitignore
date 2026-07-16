@@ -3,6 +3,12 @@ dist
 *.local
 .DS_Store
 
-# KayKit 원본 에셋팩 (fbx/obj/gltf 원본) - 코드에서 미사용, 용량만 큼
+# KayKit 원본 다운로드 팩 전체(fbx/obj/gltf 원본) - 코드에서 미사용, 용량만 큼
 src/public/KayKit_Adventurers_2.0_FREE/
-src/public/assets/
+
+# 3D 에셋 원본 소스 포맷 - 런타임(GLTFLoader)은 .glb만 사용, 나머지는 용량만 차지
+src/public/assets/**/*.fbx
+src/public/assets/**/*.obj
+src/public/assets/**/*.mtl
+src/public/assets/**/*.dae
+src/public/assets/**/fbx (Unity Rotated)/
