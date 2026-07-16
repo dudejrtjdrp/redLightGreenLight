@@ -24,6 +24,7 @@ import { PlayerSystem } from "../src/gameplay/PlayerSystem";
 import { BotController } from "../src/gameplay/BotController";
 import { CargoSystem } from "../src/gameplay/CargoSystem";
 import { ScoreSystem } from "../src/gameplay/ScoreSystem";
+import { CaughtMarchSystem } from "../src/gameplay/CaughtMarchSystem";
 import { GameBalance } from "../src/config/GameBalance";
 import { PlayerConfig } from "../src/config/PlayerConfig";
 import { gameBus } from "../src/core/EventBus";
@@ -75,6 +76,7 @@ function runRound(moverCount: number, rng: () => number): RoundRecord {
     systems.push(new PlayerSystem(m, bot, round, cargo));
   }
   const score = new ScoreSystem(seeker, movers);
+  const march = new CaughtMarchSystem(movers, cargo, round);
 
   const allDone = () =>
     movers.every((m) => m.status !== MoverStatus.ALIVE || m.status === undefined) ||
@@ -88,6 +90,7 @@ function runRound(moverCount: number, rng: () => number): RoundRecord {
   while (round.phase !== RoundPhase.END && t < 300) {
     for (const b of bots) b.update(dt);
     for (const s of systems) s.update(dt);
+    march.update(dt);
     cargo.updateFlights(dt);
     cargo.updateRecovery(movers);
     round.update(dt);
@@ -95,6 +98,7 @@ function runRound(moverCount: number, rng: () => number): RoundRecord {
     t += dt;
   }
 
+  score.settle(); // 타임업 미완주자 탈락 처리 반영(원작 규칙)
   const rec: RoundRecord = {
     moverCount,
     catches: seeker.catches,

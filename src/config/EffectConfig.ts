@@ -56,6 +56,9 @@ export const EffectConfig = {
     side: -1,
     /** 도착 판정 반경. */
     arriveEps: 0.15,
+    /** 가는 길 짐 낙하 간격(경로/(짐+1)을 이 범위로 클램프). */
+    dropEveryMin: 0.8,
+    dropEveryMax: 2.4,
   },
 
   /**

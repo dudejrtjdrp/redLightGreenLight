@@ -14,7 +14,7 @@ import { Mover, MoverStatus } from "./Mover";
 import { Seeker } from "./Seeker";
 import { moverScoreOf, catchBonusOf, seekerScoreOf } from "./BalanceDebug";
 import { GameBalance } from "../config/GameBalance";
-import "./GameplayEvents";
+import { emitMoverCaught } from "./GameplayEvents";
 
 export class ScoreSystem {
   private settled = false;
@@ -55,6 +55,16 @@ export class ScoreSystem {
   /** 라운드 종료 정산(중복 방지). */
   settle(): void {
     if (this.settled) return;
+
+    // ★ 원작 규칙(Phase 10): 시간 내 완주하지 못한 생존자는 그대로 탈락(잡힘) 처리.
+    //   emitMoverCaught → onCaught로 술래 catches 증가 + 줄서기 연출(mover:caught 구독자).
+    for (const m of this.movers) {
+      if (m.status === MoverStatus.ALIVE) {
+        console.log(`[TIMEOUT] mover ${m.id} 시간 내 미완주 → 탈락 처리`);
+        emitMoverCaught(m);
+      }
+    }
+
     this.settled = true;
 
     const survivors = this.survivorCount();

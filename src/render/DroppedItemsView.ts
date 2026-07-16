@@ -15,15 +15,16 @@ export class DroppedItemsView {
 
   constructor(private readonly cargo: CargoSystem) {
     this.group = new THREE.Group();
+    // 트랙 잔류 짐 = 들고 있던 짐과 동일한 박스(크기/색 통일 → "짐이 떨어졌다"가 즉시 읽힘).
     const s = ItemConfig.visualScale;
     const geo = new THREE.BoxGeometry(
       ItemConfig.visualSize * 2 * s,
-      ItemConfig.visualSize * 1.4 * s,
+      ItemConfig.stackGap * 0.9 * s,
       ItemConfig.visualSize * 2 * s,
     );
     const mat = new THREE.MeshStandardMaterial({
-      color: 0xbb8822,
-      roughness: 0.9,
+      color: 0xffcc44,
+      roughness: 0.8,
     });
     for (let i = 0; i < EffectConfig.droppedPoolSize; i++) {
       const m = new THREE.Mesh(geo, mat);
@@ -41,9 +42,10 @@ export class DroppedItemsView {
       const item = i < items.length ? items[i] : undefined;
       if (item && item.position) {
         m.visible = true;
+        // 바닥(y=0, 도로 상판)에 밑면이 닿게: y = 박스 높이/2.
         m.position.set(
           item.position.x,
-          ItemConfig.visualSize * 0.7 * ItemConfig.visualScale,
+          (ItemConfig.stackGap * 0.9 * ItemConfig.visualScale) / 2 + 0.01,
           item.position.z,
         );
       } else if (m.visible) {

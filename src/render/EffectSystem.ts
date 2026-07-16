@@ -11,6 +11,7 @@ import * as THREE from "three";
 import { ObjectPool } from "../core/ObjectPool";
 import { gameBus } from "../core/EventBus";
 import { EffectConfig } from "../config/EffectConfig";
+import { ItemConfig } from "../config/ItemConfig";
 import "../gameplay/GameplayEvents";
 
 interface Vec3Like {
@@ -41,8 +42,14 @@ export class EffectSystem {
   constructor() {
     this.group = new THREE.Group();
     const e = EffectConfig.dropFlight;
-    const geo = new THREE.BoxGeometry(e.size, e.size, e.size);
-    const mat = new THREE.MeshStandardMaterial({ color: 0xffb733, roughness: 0.7 });
+    // 낙하 중에도 "들고 있던 짐과 동일한 박스"가 떨어져야 한다(작은 정육면체 X).
+    const s = ItemConfig.visualScale;
+    const geo = new THREE.BoxGeometry(
+      ItemConfig.visualSize * 2 * s,
+      ItemConfig.stackGap * 0.9 * s,
+      ItemConfig.visualSize * 2 * s,
+    );
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffcc44, roughness: 0.7 });
 
     this.pool = new ObjectPool<Flight>(
       () => {

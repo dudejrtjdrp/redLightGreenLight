@@ -8,6 +8,7 @@ import { PlayerSystem } from "../src/gameplay/PlayerSystem";
 import { BotController } from "../src/gameplay/BotController";
 import { CargoSystem } from "../src/gameplay/CargoSystem";
 import { ScoreSystem } from "../src/gameplay/ScoreSystem";
+import { CaughtMarchSystem } from "../src/gameplay/CaughtMarchSystem";
 import { GameBalance } from "../src/config/GameBalance";
 import { PlayerConfig } from "../src/config/PlayerConfig";
 import { gameBus } from "../src/core/EventBus";
@@ -50,6 +51,7 @@ for (const moverCount of [2, 3, 4, 5, 7]) {
       systems.push(new PlayerSystem(m, bot, round, cargo));
     }
     const score = new ScoreSystem(seeker, movers);
+    const march = new CaughtMarchSystem(movers, cargo, round);
     round.start();
     const dt = 1 / 60;
     let t = 0;
@@ -57,12 +59,14 @@ for (const moverCount of [2, 3, 4, 5, 7]) {
     while (round.phase !== RoundPhase.END && t < 300) {
       for (const b of bots) b.update(dt);
       for (const s of systems) s.update(dt);
+      march.update(dt);
       cargo.updateFlights(dt);
       cargo.updateRecovery(movers);
       round.update(dt);
       if (round.isActive && done()) round.forceEnd();
       t += dt;
     }
+    score.settle(); // 타임업 미완주자 탈락 반영
     const sk = score.seekerScore();
     const top = Math.max(...movers.map((m) => score.moverScore(m)));
     if (sk > top + 1e-9) seekerWins++;

@@ -78,16 +78,17 @@ export class CargoSystem {
   }
 
   /**
-   * 급정지 낙하: count개를 소유 목록에서 꺼내 트랙에 떨어뜨린다.
+   * 낙하: count개를 소유 목록에서 꺼내 트랙에 떨어뜨린다.
+   * @param awardSeeker false면 술래 가점 없이 낙하만(라운드 종료 후 줄서기 연출용 forfeit).
    * @returns 실제 낙하한 개수(보유량으로 상한).
    */
-  dropFrom(mover: Mover, count: number): number {
+  dropFrom(mover: Mover, count: number, awardSeeker = true): number {
     const owned = this.ownedByMover.get(mover.id);
     if (!owned || owned.length === 0 || count <= 0) return 0;
     const n = Math.min(count, owned.length);
     for (let i = 0; i < n; i++) {
       const item = owned.pop() as Item;
-      this.dropOne(mover, item);
+      this.dropOne(mover, item, awardSeeker);
     }
     return n;
   }
@@ -97,7 +98,7 @@ export class CargoSystem {
    *  - 짐은 tilt 방향 바깥으로 밀려나 착지(landing = 회수 위치).
    *  - 비행 동안은 pending(표시/회수 X). 착지(updateFlights) 후 dropped로 전환.
    */
-  private dropOne(mover: Mover, item: Item): void {
+  private dropOne(mover: Mover, item: Item, awardSeeker = true): void {
     const cargoBefore = mover.cargo;
     const seekerBefore = this.seeker.score;
 
@@ -120,9 +121,9 @@ export class CargoSystem {
     item.dropperId = mover.id;
     mover.cargo -= 1;
 
-    // 술래 가점: 재수확 상한 내에서만(무한 faucet 방지).
+    // 술래 가점: 재수확 상한 내에서만(무한 faucet 방지). forfeit 낙하는 가점 없음.
     let seekerGained = 0;
-    if (item.harvestCount < ItemConfig.maxSeekerHarvestPerItem) {
+    if (awardSeeker && item.harvestCount < ItemConfig.maxSeekerHarvestPerItem) {
       item.harvestCount += 1;
       this.seeker.score += ItemConfig.pointPerItem;
       this.seeker.droppedCargoClaimed += 1;
@@ -150,7 +151,12 @@ export class CargoSystem {
     gameBus.emit("item:dropped", {
       itemId: item.id,
       byMoverId: mover.id,
-      to: { x: landing.x, y: ItemConfig.visualSize * 0.7 * ItemConfig.visualScale, z: landing.z },
+      // 착지 높이 = 짐 박스 절반(밑면이 도로 상판 y=0에 닿는 지점).
+      to: {
+        x: landing.x,
+        y: (ItemConfig.stackGap * 0.9 * ItemConfig.visualScale) / 2 + 0.01,
+        z: landing.z,
+      },
     });
   }
 

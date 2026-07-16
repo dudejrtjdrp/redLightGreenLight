@@ -98,8 +98,8 @@ function startGame(options: GameOptions): void {
     }
   }
   const scoreSystem = new ScoreSystem(seeker, movers);
-  // 무궁화꽃 원작 연출: 잡힌 무버는 술래 왼쪽으로 걸어가 줄을 선다.
-  const march = new CaughtMarchSystem(movers);
+  // 무궁화꽃 원작 연출: 잡힌 무버는 짐을 흘리며 술래 왼쪽으로 걸어가 줄을 선다.
+  const march = new CaughtMarchSystem(movers, cargo, round);
 
   // --- 렌더/UI 레이어 ---
   const gameRenderer = new GameRenderer(scene, movers, PLAYER_ID, cargo);

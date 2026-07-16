@@ -66,12 +66,19 @@ export class MapView {
     tile.updateWorldMatrix(true, true);
 
     // 회전 반영된 실측으로 z 스텝(하드코딩 금지).
+    const bbox = new THREE.Box3().setFromObject(tile);
     const size = new THREE.Vector3();
-    new THREE.Box3().setFromObject(tile).getSize(size);
+    bbox.getSize(size);
     const stepZ = Math.max(size.z, 0.5);
     const roadHalfWidth = Math.max(size.x, 0.5) / 2; // 도로 절반폭(프롭 배치 경계)
+    /**
+     * 도로 "상판" 높이(스케일 반영). 타일을 이만큼 내려 상판이 정확히 groundY(=0)에 오게 한다.
+     * (스케일 2.5 확대 후 상판이 y>0로 올라와 낙하 짐/완주선이 도로에 묻히던 문제의 근본 수정)
+     */
+    const surfaceY = Math.max(0, bbox.max.y);
     console.log(
-      `[Map] 타일 실측 x=${size.x.toFixed(2)} z=${size.z.toFixed(2)} (tileYaw=${MapConfig.tileYaw.toFixed(2)}) → stepZ=${stepZ.toFixed(2)}`,
+      `[Map] 타일 실측 x=${size.x.toFixed(2)} z=${size.z.toFixed(2)} 상판y=${surfaceY.toFixed(2)}` +
+        ` (tileYaw=${MapConfig.tileYaw.toFixed(2)}) → stepZ=${stepZ.toFixed(2)}`,
     );
 
     const startZ = GameBalance.track.startZ;
@@ -85,7 +92,11 @@ export class MapView {
 
     for (let i = 0; i < count; i++) {
       const clone = tile.clone(true);
-      clone.position.set(MapConfig.centerX, MapConfig.groundY, zHi - (i + 0.5) * stepZ);
+      clone.position.set(
+        MapConfig.centerX,
+        MapConfig.groundY - surfaceY, // 상판을 groundY에 정렬(짐/라인 매몰 방지)
+        zHi - (i + 0.5) * stepZ,
+      );
       makeStatic(clone);
       group.add(clone);
     }
