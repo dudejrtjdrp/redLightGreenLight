@@ -104,13 +104,14 @@ export const BalanceConfig: BalanceConfigShape = {
 
   stopDamping: 9.0,
   moveInstabilityScale: 1.6,
-  walkSwayGain: 1.2, // 오실레이션(좌우 진동) 하향
+  // 참고: damping은 아래 값. 매끄러움을 위해 소폭 상향.
+  walkSwayGain: 0, // 걸음 좌우 진동 완전 제거(흔들림 없음)
   walkSwayStepCoupling: 1.0,
   walkStride: 0.9,
 
   instabilityGain: 3.4, // inverted-pendulum 증폭 상향(기운 뒤 더 급하게 커짐)
-  instabilityNoise: 0.3, // 지터 감소
-  damping: 2.0,
+  instabilityNoise: 0, // 지터 완전 제거(짐 떨림 없음). 쏠림은 leanDrift(부드러운 방향 변화)가 담당.
+  damping: 2.6, // 소폭 상향(tiltVel 매끄럽게, 미세 진동 억제)
   stackHeightSensitivity: 0.3,
 
   counterTorque: 10.0,

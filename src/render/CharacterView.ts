@@ -45,6 +45,7 @@ export class CharacterView {
   private readonly leanNode: THREE.Group; // 수평 이동(무게중심)
   private readonly pivotNode: THREE.Group; // 잔여 회전(허리 높이 축)
   private readonly contentNode: THREE.Group; // 모델 + 스택
+  private root!: THREE.Object3D; // glb 모델 루트(이동방향 조향용)
   private readonly mixer: THREE.AnimationMixer;
   private readonly walkAction: THREE.AnimationAction | null;
   private readonly idleAction: THREE.AnimationAction | null;
@@ -55,9 +56,13 @@ export class CharacterView {
   private readonly materials: THREE.MeshStandardMaterial[] = [];
 
   private visTilt = 0;
+  private bodyVisTilt = 0; // 몸 lean용 저역통과
   private animTime = 0;
   private flinchEnergy = 0;
   private flashEnergy = 0;
+  private steerYaw = 0; // 이동방향 조향(정면 대비)
+  private prevX = 0;
+  private prevZ = 0;
 
   private readonly curEmissive: THREE.Color;
   private readonly targetEmissive: THREE.Color;
@@ -69,7 +74,7 @@ export class CharacterView {
     const loader = new GLTFLoader();
 
     let charGltf;
-    const charUrl = AssetConfig.character.path;
+    const charUrl = AssetConfig.player.path;
     try {
       console.log("[KayKit] 캐릭터 로드 시도:", charUrl);
       charGltf = await loader.loadAsync(charUrl);
@@ -109,7 +114,7 @@ export class CharacterView {
     this.shadows = shadows;
     this.group = new THREE.Group();
     // 정면 -Z + 모델 정면 보정.
-    this.group.rotation.y = Math.PI + AssetConfig.character.yawOffset;
+    this.group.rotation.y = Math.PI + AssetConfig.player.yawOffset;
 
     // 계층: group → leanNode(수평이동) → pivotNode(허리축 회전) → contentNode(모델+스택).
     //  발밑(y=0)이 아니라 허리 높이를 축으로 소량 회전 + 주로 수평 이동 → base가 호를 안 그림.
@@ -122,8 +127,11 @@ export class CharacterView {
     this.contentNode.position.y = -AssetConfig.bodyLeanPivotHeight;
     this.pivotNode.add(this.contentNode);
 
-    root.scale.setScalar(AssetConfig.character.scale);
+    root.scale.setScalar(AssetConfig.player.scale);
+    this.root = root;
     this.contentNode.add(root);
+    this.prevX = mover.position.x;
+    this.prevZ = mover.position.z;
 
     // 그림자 + 틴트 대상 머티리얼 수집(인스턴스별 클론).
     root.traverse((o) => {
@@ -230,15 +238,34 @@ export class CharacterView {
     }
     this.mixer.update(dt);
 
-    // 몸 tilt 표현 = 수평 이동(무게중심) + 소량 잔여 회전(허리 높이 축). 발밑 회전 금지.
-    //  스택 shear와 같은 부호축: 로컬 -tilt → (group rotation.y=π) → 월드 +x(=tilt>0).
-    let offX = -this.mover.tilt * AssetConfig.bodyLeanScale;
+    // 이동 방향 바라보기(3인칭 게임식): 이동 헤딩 전체로 모델(root)만 부드럽게 회전.
+    //  group(rotation.y=π)은 tilt/스택/낙하 프레임이라 불변 → root 회전은 이 프레임을 상쇄해
+    //  월드 헤딩을 그대로 향하게. (KayKit 모델 +Z정면 가정; 반대면 face.modelYawOffset=π)
+    const dx = this.mover.position.x - this.prevX;
+    const dz = this.mover.position.z - this.prevZ;
+    this.prevX = this.mover.position.x;
+    this.prevZ = this.mover.position.z;
+    const f = AssetConfig.face;
+    if (!caught && dx * dx + dz * dz > f.moveEps * f.moveEps) {
+      // 월드 이동 헤딩 → group(π) 상쇄 → 모델 로컬 yaw.
+      const target = Math.atan2(dx, dz) - Math.PI + f.modelYawOffset;
+      // 최단 경로 각도 보간(완전 회전, 클램프 없음).
+      let diff = target - this.steerYaw;
+      diff = ((diff + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+      this.steerYaw += diff * Math.min(1, f.turnSpeed * dt);
+    }
+    this.root.rotation.y = this.steerYaw;
+
+    // 몸 tilt 표현 = 수평 이동(무게중심) + 소량 잔여 회전. 시각 tilt는 저역통과(덜덜 방지).
+    this.bodyVisTilt +=
+      (this.mover.tilt - this.bodyVisTilt) * Math.min(1, AssetConfig.bodyLeanFollow * dt);
+    let offX = -this.bodyVisTilt * AssetConfig.bodyLeanScale;
     const om = AssetConfig.bodyLeanMax;
     if (offX > om) offX = om;
     else if (offX < -om) offX = -om;
     this.leanNode.position.x = offX;
 
-    let rot = this.mover.tilt * AssetConfig.bodyLeanRotate;
+    let rot = this.bodyVisTilt * AssetConfig.bodyLeanRotate;
     const rm = AssetConfig.bodyLeanRotateMax;
     if (rot > rm) rot = rm;
     else if (rot < -rm) rot = -rm;

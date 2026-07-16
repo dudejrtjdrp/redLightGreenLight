@@ -22,12 +22,14 @@ export class SceneManager {
   constructor(container: HTMLElement) {
     this.container = container;
 
-    // --- Scene --- 밝고 산뜻한 파티 톤.
-    const bg = ArtConfig.scene.background;
+    // --- Scene --- 그라디언트 스카이(하늘→지평선). 안개 색은 지평선에 맞춤.
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(bg);
+    this.scene.background = SceneManager.makeSkyTexture(
+      ArtConfig.scene.skyTop,
+      ArtConfig.scene.skyHorizon,
+    );
     this.scene.fog = new THREE.Fog(
-      bg,
+      ArtConfig.scene.skyHorizon,
       ArtConfig.scene.fogNear,
       ArtConfig.scene.fogFar,
     );
@@ -167,5 +169,26 @@ export class SceneManager {
   }
   private aspect(): number {
     return this.width() / this.height();
+  }
+
+  /** 세로 그라디언트 하늘 텍스처(정적, 매 프레임 갱신 없음). */
+  private static makeSkyTexture(
+    topHex: number,
+    bottomHex: number,
+  ): THREE.Texture | THREE.Color {
+    const c = document.createElement("canvas");
+    c.width = 2;
+    c.height = 256;
+    const ctx = c.getContext("2d");
+    if (!ctx) return new THREE.Color(bottomHex);
+    const grad = ctx.createLinearGradient(0, 0, 0, c.height);
+    grad.addColorStop(0, "#" + topHex.toString(16).padStart(6, "0"));
+    grad.addColorStop(1, "#" + bottomHex.toString(16).padStart(6, "0"));
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, c.width, c.height);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.needsUpdate = true;
+    return tex;
   }
 }

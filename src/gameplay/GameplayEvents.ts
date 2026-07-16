@@ -40,6 +40,8 @@ declare module "../core/EventBus" {
       byMoverId: number;
       to: Vec3;
     };
+    /** 낙하 짐이 바닥에 안착(비행 종료) → 회수 가능한 트랙 낙하물로 전환. */
+    "item:landed": { itemId: number };
     /** 무버 체포: 레드 때 전진 이동 또는 경고 누적 초과로 탈락 */
     "mover:caught": { moverId: number };
     /** 무버 완주: 도착 지점 진입 */

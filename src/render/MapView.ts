@@ -13,6 +13,18 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { GameBalance } from "../config/GameBalance";
 import { MapConfig } from "../config/MapConfig";
 
+/** 시드 기반 PRNG(mulberry32) — 재현 가능한 배치. */
+function makeRng(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
 function makeStatic(obj: THREE.Object3D): void {
   obj.traverse((o) => {
     const m = o as THREE.Mesh;
@@ -57,6 +69,7 @@ export class MapView {
     const size = new THREE.Vector3();
     new THREE.Box3().setFromObject(tile).getSize(size);
     const stepZ = Math.max(size.z, 0.5);
+    const roadHalfWidth = Math.max(size.x, 0.5) / 2; // 도로 절반폭(프롭 배치 경계)
     console.log(
       `[Map] 타일 실측 x=${size.x.toFixed(2)} z=${size.z.toFixed(2)} (tileYaw=${MapConfig.tileYaw.toFixed(2)}) → stepZ=${stepZ.toFixed(2)}`,
     );
@@ -83,39 +96,32 @@ export class MapView {
       for (const p of MapConfig.decor.props) {
         try {
           const g = await loader.loadAsync(encodeURI(p));
-          const t = g.scene;
-          t.scale.setScalar(MapConfig.decor.scale);
-          templates.push(t);
+          templates.push(g.scene); // 스케일은 배치 시 지정(이중 적용 방지)
         } catch (e) {
           console.warn("[Map] 장식 로드 실패(무시):", p, e);
         }
       }
       if (templates.length > 0) {
-        let idx = 0;
-        for (let z = zHi; z >= zLo; z -= MapConfig.decor.spacing) {
-          for (const side of [-1, 1] as const) {
-            const t = templates[idx % templates.length].clone(true);
-            t.position.set(side * MapConfig.decor.sideOffsetX, MapConfig.groundY, z);
-            t.rotation.y = side > 0 ? 0 : Math.PI; // 도로 쪽을 바라보게
-            makeStatic(t);
-            group.add(t);
-            idx++;
-          }
+        const d = MapConfig.decor;
+        const rng = makeRng(d.seed);
+        const zRange = zHi - zLo;
+        // 도로 밖(도로 절반폭 + edgeMargin 이후)에만 seeded random 흩뿌림.
+        const minX = roadHalfWidth + d.edgeMargin;
+        for (let k = 0; k < d.count; k++) {
+          const t = templates[Math.floor(rng() * templates.length)].clone(true);
+          const side = rng() < 0.5 ? -1 : 1;
+          const x = side * (minX + rng() * d.spreadX);
+          const z = zLo + rng() * zRange;
+          const s = d.scale + (rng() * 2 - 1) * d.scaleJitter;
+          t.position.set(x, MapConfig.groundY, z);
+          t.rotation.y = rng() * Math.PI * 2;
+          t.scale.setScalar(Math.max(0.4, s));
+          makeStatic(t);
+          group.add(t);
         }
-        // 배경 깊이용 먼 나무열(더 넓은 간격).
-        if (MapConfig.decor.farOffsetX > 0) {
-          for (let z = zHi; z >= zLo; z -= MapConfig.decor.spacing * 1.7) {
-            for (const side of [-1, 1] as const) {
-              const t = templates[idx % templates.length].clone(true);
-              t.position.set(side * MapConfig.decor.farOffsetX, MapConfig.groundY, z);
-              t.rotation.y = side > 0 ? 0 : Math.PI;
-              makeStatic(t);
-              group.add(t);
-              idx++;
-            }
-          }
-        }
-        console.log(`[Map] 장식 ${templates.length}종 배치(근/원 양옆), 간격 ${MapConfig.decor.spacing}`);
+        console.log(
+          `[Map] 장식 ${d.count}개 배치(도로밖 |x|≥${minX.toFixed(1)}, seed ${d.seed})`,
+        );
       }
     }
 

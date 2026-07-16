@@ -112,8 +112,8 @@ export const GameBalance = {
   track: {
     startZ: 0,
     length: 32,
-    /** 좌우 레인 반폭(이후 낙하 짐 위치/충돌에 사용). */
-    laneHalfWidth: 3,
+    /** 좌우 레인 반폭(무버 좌우 이동 한계). 도로 폭과 일치하도록 확장. */
+    laneHalfWidth: 4.5,
   },
 
   /**

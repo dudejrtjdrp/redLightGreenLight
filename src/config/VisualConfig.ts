@@ -52,13 +52,13 @@ export const VisualConfig = {
 
   /** 아슬아슬(danger) 위험 연출: 맨 위 짐 wobble + 몸 붉은 강조. 낙하 X, 예고만. */
   danger: {
-    /** 상위 짐 미세 진동 진폭(유닛). */
-    wobbleAmp: 0.05,
-    /** 진동 주파수. */
-    wobbleFreq: 24,
+    /** 상위 짐 미세 진동 진폭(유닛). 0 = 떨림 완전 제거(danger는 색으로만 표현). */
+    wobbleAmp: 0,
+    /** 진동 주파수(낮춰서 느린 흔들림). */
+    wobbleFreq: 8,
     /** 몸 붉은 강조(emissive.r 가산 최대치). */
-    emissivePulse: 0.45,
-    /** 붉은 강조 깜빡임 주파수. */
-    emissiveFreq: 9,
+    emissivePulse: 0.3,
+    /** 붉은 강조 깜빡임 주파수(느리게). */
+    emissiveFreq: 5,
   },
 } as const;

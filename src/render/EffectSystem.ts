@@ -1,13 +1,17 @@
 /**
  * EffectSystem.ts
- * 낙하 아크 연출: 짐이 손/스택(from, 실제 top-box 월드좌표)에서 이탈해
- * 포물선으로 착지(to)까지 날아가는 애니메이션. GameRenderer가 spawn()으로 구동한다.
- * 착지(t≥1) 시 Pool 반환. 매 프레임 new 없음. 착지 타이밍은 CargoSystem 회수 전환과 duration 공유.
+ * 낙하 연속 애니메이션(중력 적분). 짐이 손/스택(from, 실제 top-box 월드좌표)에서 이탈해
+ * 매 프레임 중력으로 착지(to)까지 "끊김 없이" 떨어진다. GameRenderer가 spawn()으로 구동.
+ *   vx,vz: 착지 지점 방향 수평 속도 유지 / vy: 중력 적분.
+ * 착지(y ≤ 착지 높이 또는 안전 타임아웃) 시 item:landed emit → CargoSystem이 회수 가능 전환.
+ * 매 프레임 new 없음. Pool 사용.
  */
 
 import * as THREE from "three";
 import { ObjectPool } from "../core/ObjectPool";
+import { gameBus } from "../core/EventBus";
 import { EffectConfig } from "../config/EffectConfig";
+import "../gameplay/GameplayEvents";
 
 interface Vec3Like {
   x: number;
@@ -17,14 +21,16 @@ interface Vec3Like {
 
 interface Flight {
   mesh: THREE.Mesh;
-  fx: number;
-  fy: number;
-  fz: number;
-  tx: number;
-  ty: number;
-  tz: number;
+  x: number;
+  y: number;
+  z: number;
+  vx: number;
+  vy: number;
+  vz: number;
+  groundY: number;
+  spin: number;
   t: number;
-  dur: number;
+  itemId: number;
 }
 
 export class EffectSystem {
@@ -43,7 +49,10 @@ export class EffectSystem {
         const mesh = new THREE.Mesh(geo, mat);
         mesh.visible = false;
         this.group.add(mesh);
-        return { mesh, fx: 0, fy: 0, fz: 0, tx: 0, ty: 0, tz: 0, t: 0, dur: 1 };
+        return {
+          mesh, x: 0, y: 0, z: 0, vx: 0, vy: 0, vz: 0,
+          groundY: 0, spin: 0, t: 0, itemId: -1,
+        };
       },
       (f) => {
         f.mesh.visible = false;
@@ -52,40 +61,47 @@ export class EffectSystem {
     );
   }
 
-  /** 낙하 아크 시작: from(실제 이탈 월드좌표) → to(착지). GameRenderer가 호출. */
-  spawn(from: Vec3Like, to: Vec3Like): void {
+  /**
+   * 낙하 시작: from(실제 이탈 월드좌표) → to(착지). 중력 낙하로 연속 이동.
+   * 수평 속도는 착지점까지의 자유낙하 시간 T 기준으로 맞춰 to에 정확히 안착.
+   */
+  spawn(from: Vec3Like, to: Vec3Like, itemId: number): void {
+    const e = EffectConfig.dropFlight;
     const f = this.pool.acquire();
+    const dh = Math.max(0.001, from.y - to.y);
+    const T = Math.sqrt((2 * dh) / e.gravity); // 자유낙하(vy0=0) 시간
+    f.x = from.x;
+    f.y = from.y;
+    f.z = from.z;
+    f.vx = (to.x - from.x) / T; // 수평은 등속(쏠린 방향 유지)
+    f.vz = (to.z - from.z) / T;
+    f.vy = 0;
+    f.groundY = to.y;
+    f.spin = (Math.random() < 0.5 ? -1 : 1) * e.spin;
     f.t = 0;
-    f.dur = EffectConfig.dropFlight.duration;
-    f.fx = from.x;
-    f.fy = from.y;
-    f.fz = from.z;
-    f.tx = to.x;
-    f.ty = to.y;
-    f.tz = to.z;
+    f.itemId = itemId;
     f.mesh.visible = true;
-    f.mesh.position.set(f.fx, f.fy, f.fz);
+    f.mesh.position.set(f.x, f.y, f.z);
     f.mesh.rotation.set(0, 0, 0);
     this.active.push(f);
   }
 
   update(dt: number): void {
-    const arc = EffectConfig.dropFlight.arcHeight;
-    const tumble = EffectConfig.dropFlight.tumble;
+    const e = EffectConfig.dropFlight;
     for (let i = this.active.length - 1; i >= 0; i--) {
       const f = this.active[i];
       f.t += dt;
-      let k = f.t / f.dur;
-      if (k > 1) k = 1;
-      // 수평 선형 보간 + 포물선(y) — 바닥 피벗 회전 없이 옆으로 밀려나며 낙하.
-      const x = f.fx + (f.tx - f.fx) * k;
-      const z = f.fz + (f.tz - f.fz) * k;
-      const yLin = f.fy + (f.ty - f.fy) * k;
-      const y = yLin + Math.sin(Math.PI * k) * arc;
-      f.mesh.position.set(x, y, z);
-      f.mesh.rotation.x += tumble * dt;
-      f.mesh.rotation.z += tumble * 0.6 * dt;
-      if (k >= 1) {
+      f.vy -= e.gravity * dt;
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      f.z += f.vz * dt;
+      f.mesh.position.set(f.x, f.y, f.z);
+      f.mesh.rotation.x += f.spin * dt;
+      f.mesh.rotation.z += f.spin * 0.6 * dt;
+
+      if (f.y <= f.groundY || f.t >= e.safety) {
+        f.mesh.position.y = f.groundY;
+        gameBus.emit("item:landed", { itemId: f.itemId }); // 착지 → 회수 전환
         this.active.splice(i, 1);
         this.pool.release(f);
       }

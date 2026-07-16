@@ -40,15 +40,18 @@ export const EffectConfig = {
   },
 
   /**
-   * 낙하 아크 연출: 손/스택(from)에서 착지(to)까지 포물선 비행(Object Pool).
-   * duration은 CargoSystem의 착지 대기(회수 가능 전환) 시간과 공유.
+   * 낙하 연출: 손/스택(from)에서 실제 중력 적분으로 착지(to)까지 연속 낙하(Object Pool).
+   *  vy += gravity*dt; pos += vel*dt. 착지 순간 item:landed emit → 회수 전환(끊김/순간이동 없음).
    */
   dropFlight: {
     poolSize: 24,
     size: 0.2,
-    duration: 0.75,
-    arcHeight: 0.9,
-    tumble: 3.0,
+    /** 중력(유닛/초^2). */
+    gravity: 14.0,
+    /** 낙하 중 회전 속도(rad/s). */
+    spin: 5.0,
+    /** 안전 타임아웃(초): 착지 이벤트 누락 시 강제 착지. */
+    safety: 3.0,
   },
 
   /** 트랙 위 낙하물 표시 풀 크기(초과분은 표시 생략). */

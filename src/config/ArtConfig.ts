@@ -35,8 +35,8 @@ export const ArtConfig = {
    * → 위로 갈수록 옆으로 밀리는 형태. 윗짐이 늦게 따라오는 lag는 follow로.
    */
   stackTilt: {
-    /** 시각 tilt가 데이터 tilt를 따라가는 속도(초당). 낮을수록 lag. */
-    follow: 9,
+    /** 시각 tilt가 데이터 tilt를 따라가는 속도(초당). 낮출수록 저역통과(smoothing) → 미세 지터 제거. */
+    follow: 5,
     /** 전단 오프셋: 높이 인덱스(i)당 가로 오프셋 = visTilt × shearPerLevel × i. */
     shearPerLevel: 0.09,
     /** 짐 가로 오프셋 절대 상한. */
@@ -75,10 +75,13 @@ export const ArtConfig = {
 
   /** 씬/라이팅/포스트(가볍게). */
   scene: {
-    /** 밝고 산뜻한 파티 톤 하늘. */
+    /** 밝고 산뜻한 파티 톤 하늘(폴백 단색). */
     background: 0x9ec9e8,
-    fogNear: 22,
-    fogFar: 58,
+    /** 그라디언트 하늘: 위(하늘) → 아래(지평선). */
+    skyTop: 0x5aa0e6,
+    skyHorizon: 0xdceff7,
+    fogNear: 26,
+    fogFar: 70,
     exposure: 1.12,
     /** 소프트 그림자 1개. 프레임 드랍 시 false로 끄면 됨(동작 > 화려함). */
     shadows: true,

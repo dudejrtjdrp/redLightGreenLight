@@ -14,8 +14,8 @@ export const MapConfig = {
   /** 직선 도로 타일(트랙을 따라 반복 배치). */
   roadTile: "/assets/Map/[FREE] Modular Roads - Base/PLUS/gltf/Road1.glb",
 
-  /** 타일 스케일(도로 폭이 논리 레인 폭을 덮도록 조정). */
-  scale: 1.0,
+  /** 타일 스케일(도로 폭이 논리 레인 폭 ±laneHalfWidth 을 덮도록 조정). */
+  scale: 1.6,
   /**
    * 각 도로 타일 회전(라디안). 도로가 트랙(세로, -z)을 따라 깔리게.
    * 가로로 깔리면 여기에 Math.PI/2 를 넣어 90° 돌리면 됨(정사각 타일 자동판별 대신 명시).
@@ -35,7 +35,10 @@ export const MapConfig = {
   /** 로드 후 기존 그리드 헬퍼 숨김(도로 위 격자 제거). */
   hideGrid: true,
 
-  /** 도로 양옆 장식(가로등/나무/덤불 등). 한 번 로드 후 클론 배치. */
+  /**
+   * 도로 양옆 장식(가로등/나무/덤불). 한 번 로드 후 클론.
+   * 도로 폭 밖(도로 절반폭 + edgeMargin 이후)에만 seeded random으로 흩뿌림 → 도로 안에는 절대 X.
+   */
   decor: {
     enabled: true,
     props: [
@@ -43,13 +46,18 @@ export const MapConfig = {
       "/assets/Map/[FREE] Modular Roads - Base/PLUS/gltf/tree_1_a.glb",
       "/assets/Map/[FREE] Modular Roads - Base/PLUS/gltf/bush_1.glb",
       "/assets/Map/[FREE] Modular Roads - Base/PLUS/gltf/Tree3.glb",
+      "/assets/Map/[FREE] Modular Roads - Base/PLUS/gltf/Tree4.glb",
     ],
-    /** z 방향 배치 간격(유닛). */
-    spacing: 4.5,
-    /** 도로 중심에서 좌우 배치 거리(레인 밖). */
-    sideOffsetX: 4.4,
-    /** 배경 깊이용 먼 나무열 좌우 거리(0이면 끔). */
-    farOffsetX: 9.0,
+    /** 총 배치 개수(양옆 합). */
+    count: 60,
+    /** 도로 가장자리에서 최소 여유(이 안쪽엔 배치 X). */
+    edgeMargin: 1.6,
+    /** 도로 밖 x 랜덤 폭(edge ~ edge+spreadX). */
+    spreadX: 7.0,
+    /** 스케일 랜덤(base ± jitter). */
     scale: 1.0,
+    scaleJitter: 0.35,
+    /** 재현 가능한 배치 시드. */
+    seed: 1337,
   },
 } as const;

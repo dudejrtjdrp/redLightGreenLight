@@ -72,7 +72,7 @@ export class GameRenderer {
       this.avatar.addFlinch(ArtConfig.flinch.dropImpulse);
       this.addScreenShake(ArtConfig.screenShake.dropEnergy);
       const from = this.avatar.getBoxWorldPosition(this.player.cargo, this.scratch);
-      this.effects.spawn(from, payload.to);
+      this.effects.spawn(from, payload.to, payload.itemId);
     });
     gameBus.on("mover:caught", () =>
       this.addScreenShake(ArtConfig.screenShake.caughtEnergy),

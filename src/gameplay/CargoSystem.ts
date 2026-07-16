@@ -49,6 +49,19 @@ export class CargoSystem {
     prewarm = 0,
   ) {
     this.pool = new ItemPool(prewarm);
+    // 시각 낙하가 바닥에 닿는 순간 → 회수 가능한 트랙 낙하물로 전환(끊김 없이 동기).
+    gameBus.on("item:landed", ({ itemId }) => this.landById(itemId));
+  }
+
+  /** 착지 이벤트로 pending → dropped 전환. */
+  private landById(itemId: number): void {
+    for (let i = 0; i < this.pending.length; i++) {
+      if (this.pending[i].item.id === itemId) {
+        this.dropped.push(this.pending[i].item);
+        this.pending.splice(i, 1);
+        return;
+      }
+    }
   }
 
   get droppedCount(): number {
@@ -132,8 +145,8 @@ export class CargoSystem {
     // 비행 대기열에 등록(착지 후 회수 가능). onItemDropped는 분리 시점에 emit.
     // 아크 시작점(from)은 렌더 레이어(GameRenderer)가 실제 top-box 월드좌표로 채움 →
     // 여기선 착지점(to)만 전달. (허공/밑동 스폰 금지, 팝인 없음)
-    const dur = EffectConfig.dropFlight.duration;
-    this.pending.push({ item, timer: dur });
+    // 착지는 item:landed(시각 낙하가 바닥에 닿을 때)로 전환. timer는 이벤트 누락 대비 안전장치.
+    this.pending.push({ item, timer: EffectConfig.dropFlight.safety + 1.0 });
     gameBus.emit("item:dropped", {
       itemId: item.id,
       byMoverId: mover.id,
@@ -141,7 +154,7 @@ export class CargoSystem {
     });
   }
 
-  /** 비행 중 낙하 짐의 착지 처리. 착지하면 회수 가능한 dropped로 전환. */
+  /** 안전장치: 착지 이벤트 누락 시 타임아웃으로 강제 전환. 정상은 item:landed로 처리. */
   updateFlights(dt: number): void {
     if (this.pending.length === 0) return;
     for (let i = this.pending.length - 1; i >= 0; i--) {
@@ -149,7 +162,7 @@ export class CargoSystem {
       p.timer -= dt;
       if (p.timer <= 0) {
         this.pending.splice(i, 1);
-        this.dropped.push(p.item); // 이제 트랙 위 낙하물(표시/회수 가능)
+        this.dropped.push(p.item);
       }
     }
   }

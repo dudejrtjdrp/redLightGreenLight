@@ -15,16 +15,29 @@ export const AssetConfig = {
   enabled: true,
 
   /**
-   * 캐릭터 메시+스켈레톤(Rig_Medium) glb.
+   * 캐릭터 glb (Rig_Medium). player=무버, seeker=술래는 서로 다른 모델.
    * 실제 파일: src/public/assets/gltf/{Knight,Mage,Ranger,Rogue,Rogue_Hooded,Barbarian}.glb
    */
-  character: {
+  player: {
     path: "/assets/gltf/Knight.glb",
-    /** 발밑 원점 기준 스케일 보정(짐이 잘 보이게 살짝 축소). */
-    scale: 0.82,
-    /** 모델 정면이 -Z가 되도록 하는 yaw 보정(라디안). 모델 자체는 수정 금지. */
+    scale: 0.82, // 발밑 원점 기준. 짐이 잘 보이게 살짝 축소.
+    yawOffset: 0, // 모델 정면이 -Z가 되도록 보정(모델 자체 수정 금지).
+  },
+  seeker: {
+    path: "/assets/gltf/Barbarian.glb", // 무버와 다른 캐릭터
+    scale: 0.9,
     yawOffset: 0,
   },
+
+  /** 캐릭터가 이동 방향을 바라보게(3인칭 게임식: 이동 헤딩 전체로 부드럽게 회전). */
+  face: {
+    turnSpeed: 8, // 목표 yaw로 보간 속도(초당). 낮을수록 부드럽고 천천히.
+    moveEps: 0.02, // 이 이동량 미만이면 방향 유지(정지 시 마지막 방향).
+    /** 모델 정면 보정(라디안). 여전히 반대로 보면 Math.PI 로. */
+    modelYawOffset: 0,
+  },
+  /** 몸 tilt lean 시각 저역통과(덜덜 떨림 방지) 속도. */
+  bodyLeanFollow: 6,
 
   /** 애니메이션 클립만 추출할 glb들(같은 Rig_Medium 스켈레톤). 실패해도 개별 무시. */
   animations: [
