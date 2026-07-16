@@ -22,11 +22,11 @@ export function seekerScoreOf(
   catches: number,
   moverCount: number,
 ): number {
-  const catchBonus =
-    ((catches * (catches + 1)) / 2) * GameBalance.score.catchBonusScale;
   const n = GameBalance.score.seekerCountNorm;
   const norm = Math.pow(n.ref / Math.max(1, moverCount), n.power);
-  return (drops * GameBalance.score.dropPointScale + catchBonus) * norm;
+  return (
+    (drops * GameBalance.score.dropPointScale + catchBonusOf(catches)) * norm
+  );
 }
 
 /** 무버 점수: 반입 짐 + 생존 희소성 보너스(K / 생존자수). */
@@ -38,9 +38,17 @@ export function moverScoreOf(delivered: number, survivorCount: number): number {
   );
 }
 
-/** 잡기 보너스만 따로(정산/표시용): c번째 잡기 c점, 누적 c(c+1)/2. */
+/**
+ * 잡기 보너스만 따로(정산/표시용).
+ * Phase 10: 기본 "linear"(잡기 1명당 catchBonusScale점).
+ * "accelerating"이면 구식 가속형(c번째 잡기 c점, 누적 c(c+1)/2).
+ */
 export function catchBonusOf(catches: number): number {
-  return ((catches * (catches + 1)) / 2) * GameBalance.score.catchBonusScale;
+  const s = GameBalance.score;
+  if (s.catchBonusMode === "linear") {
+    return catches * s.catchBonusScale;
+  }
+  return ((catches * (catches + 1)) / 2) * s.catchBonusScale;
 }
 
 export interface BalanceScenario {

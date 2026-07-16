@@ -57,6 +57,12 @@ export interface BalanceConfigShape {
 
   /** A/D 되잡기 세기(counter-torque). */
   counterTorque: number;
+  /**
+   * 되잡기 세기를 쏠림 배율(속도/결승선 근접 leanScale)에 연동하는 비율(0~1).
+   * 0 = 항상 고정 세기(구버전: 고속·종반에 drift가 조작을 압도해 "눌러도 반대로 쏠림"),
+   * 1 = 불안정성이 커지는 만큼 조작력도 커짐 → 어느 속도에서든 입력이 항상 이긴다.
+   */
+  counterLeanCouple: number;
   /** A/D 좌우 이동 속도(유닛/초). */
   lateralMoveSpeed: number;
   /** 입력 스무딩 속도(초당). 높을수록 즉각적, 낮을수록 부드럽게 램프(급격한 튐 방지). */
@@ -114,7 +120,8 @@ export const BalanceConfig: BalanceConfigShape = {
   damping: 2.6, // 소폭 상향(tiltVel 매끄럽게, 미세 진동 억제)
   stackHeightSensitivity: 0.3,
 
-  counterTorque: 10.0,
+  counterTorque: 12.0, // 소폭 상향(즉답성)
+  counterLeanCouple: 0.8, // 쏠림 배율의 80%로 연동(완전 연동 1.0은 낙하 경제가 죽음 — 시뮬 확인)
   lateralMoveSpeed: 2.2,
   inputSmoothing: 14.0,
   settleAssist: 1.0, // 스프링 복원 하향(진동 감소)

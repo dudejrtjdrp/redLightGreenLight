@@ -44,9 +44,9 @@ export class SeekerView {
     this.procedural.add(nose);
     this.group.add(this.procedural);
 
-    // 완주선 너머 배치.
+    // 완주선 너머 배치(줄서기 연출과 좌표 공유: EffectConfig.seeker.standoffZ).
     const finishZ = GameBalance.track.startZ - GameBalance.track.length;
-    this.group.position.set(0, 0, finishZ - 1.2);
+    this.group.position.set(0, 0, finishZ - EffectConfig.seeker.standoffZ);
     this.group.rotation.y = this.yaw;
 
     void this.loadGlb();

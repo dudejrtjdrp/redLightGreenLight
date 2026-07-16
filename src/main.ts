@@ -20,6 +20,7 @@ import { vec2 } from "./gameplay/types";
 import { InputController } from "./input/InputController";
 import { PlayerSystem } from "./gameplay/PlayerSystem";
 import { BotController } from "./gameplay/BotController";
+import { CaughtMarchSystem } from "./gameplay/CaughtMarchSystem";
 import { itemSpeedFactor } from "./gameplay/MovementSystem";
 import { CargoSystem } from "./gameplay/CargoSystem";
 import { ScoreSystem } from "./gameplay/ScoreSystem";
@@ -97,6 +98,8 @@ function startGame(options: GameOptions): void {
     }
   }
   const scoreSystem = new ScoreSystem(seeker, movers);
+  // 무궁화꽃 원작 연출: 잡힌 무버는 술래 왼쪽으로 걸어가 줄을 선다.
+  const march = new CaughtMarchSystem(movers);
 
   // --- 렌더/UI 레이어 ---
   const gameRenderer = new GameRenderer(scene, movers, PLAYER_ID, cargo);
@@ -162,6 +165,7 @@ function startGame(options: GameOptions): void {
         // 상태머신이 RED→RESOLVE로 넘어가기 전에 반영(빈 턴 반환 정확도).
         for (const b of bots) b.update(dt);
         for (const s of systems) s.update(dt);
+        march.update(dt); // 탈락자 줄서기(생존 로직과 무관, 연출 이동만)
         cargo.updateFlights(dt); // 비행 중 낙하 짐 착지 → 회수 가능 전환
         cargo.updateRecovery(movers); // 반경 기반 회수(뒤 무버만)
         round.update(dt); // 시간 초과 시 여기서 END 전이

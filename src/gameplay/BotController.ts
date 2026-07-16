@@ -49,6 +49,8 @@ export class BotController implements MoverInput {
 
   /** 균형 보정 중 여부(히스테리시스). */
   private correcting = false;
+  /** 보정 시작까지 남은 반응 지연(초). */
+  private correctWait = 0;
   /** RED 딜레마: 이번 RED에서 "보정" 선택 여부(진입 시 1회 결정 유지). */
   private redProtect = false;
 
@@ -219,19 +221,27 @@ export class BotController implements MoverInput {
         }
       } else if (canCorrect && a >= dropTh * b.redDecideFrac) {
         this.correcting = true;
+        this.correctWait = this.range(b.correctDelay.min, b.correctDelay.max);
       }
-      this.lateralOut = this.correcting ? Math.sign(tilt) : 0;
+      this.correctWait -= dt;
+      this.lateralOut =
+        this.correcting && this.correctWait <= 0
+          ? Math.sign(tilt) * b.strength
+          : 0;
       return;
     }
 
-    // GREEN/TELL/RESOLVE: 평시 균형 보정(히스테리시스).
+    // GREEN/TELL/RESOLVE: 평시 균형 보정(히스테리시스 + 반응 지연 + 불완전 세기).
     if (this.correcting) {
       if (a <= b.releaseThreshold) this.correcting = false;
     } else if (a >= b.correctThreshold) {
       this.correcting = true;
+      this.correctWait = this.range(b.correctDelay.min, b.correctDelay.max);
     }
     if (this.correcting) {
-      this.lateralOut = Math.sign(tilt);
+      this.correctWait -= dt;
+      this.lateralOut =
+        this.correctWait <= 0 ? Math.sign(tilt) * b.strength : 0;
       return;
     }
 

@@ -229,10 +229,10 @@ export class CharacterView {
     this.group.position.x = this.mover.position.x;
     this.group.position.z = this.mover.position.z;
 
-    // 이동속도(전진) → walk/idle + timeScale.
-    const fwd = Math.abs(this.mover.velocity.z);
+    // 이동속도(전진+횡, 줄서기 march 포함) → walk/idle + timeScale.
+    const fwd = Math.hypot(this.mover.velocity.x, this.mover.velocity.z);
     const w = AssetConfig.walk;
-    const moving = !caught && fwd > w.moveEps;
+    const moving = fwd > w.moveEps;
     this.setAction(moving ? this.walkAction : this.idleAction);
     if (this.walkAction) {
       let ts = fwd / w.refSpeed;
@@ -250,7 +250,7 @@ export class CharacterView {
     this.prevX = this.mover.position.x;
     this.prevZ = this.mover.position.z;
     const f = AssetConfig.face;
-    if (!caught && dx * dx + dz * dz > f.moveEps * f.moveEps) {
+    if (dx * dx + dz * dz > f.moveEps * f.moveEps) {
       // 월드 이동 헤딩 → group(π) 상쇄 → 모델 로컬 yaw.
       const target = Math.atan2(dx, dz) - Math.PI + f.modelYawOffset;
       // 최단 경로 각도 보간(완전 회전, 클램프 없음).

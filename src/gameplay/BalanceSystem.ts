@@ -141,9 +141,18 @@ export function applyStopImpulse(mover: Mover, vStop: number): void {
   clampBalance(mover);
 }
 
-/** A/D 되잡기. dir: -1(A/좌) / +1(D/우). 쏠린 쪽으로 움직여 tilt를 0 근처로. */
-export function applyCounter(mover: Mover, dir: number, dt: number): void {
-  mover.tiltVel -= BalanceConfig.counterTorque * dir * dt;
+/**
+ * A/D 되잡기. dir: -1(A/좌) / +1(D/우). 쏠린 쪽으로 움직여 tilt를 0 근처로.
+ * @param controlScale 조작력 배율(기본 1). PlayerSystem이 쏠림 배율(leanScale)과 연동해
+ *        전달 → 고속·종반에 drift가 커져도 조작이 항상 이긴다(counterLeanCouple).
+ */
+export function applyCounter(
+  mover: Mover,
+  dir: number,
+  dt: number,
+  controlScale = 1,
+): void {
+  mover.tiltVel -= BalanceConfig.counterTorque * controlScale * dir * dt;
   clampBalance(mover);
 }
 

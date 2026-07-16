@@ -84,13 +84,19 @@ export class PlayerSystem {
     }
     this.prevHolding = holding;
 
-    // --- 좌우 이동 + counter-torque(되잡기): 스무딩된 연속 입력으로 항상 적용 ---
-    this.moveLateral(this.smoothLateral, dt);
-    applyCounter(this.mover, this.smoothLateral, dt);
-
     // 정규화 전진속도(0=정지 → 얼어붙음, 1=최대 → 최대 흔들림).
     const fwdSpeed = Math.abs(this.mover.velocity.z);
     const moveFactor = Math.min(1, fwdSpeed / PlayerConfig.baseMoveSpeed);
+
+    // --- 좌우 이동 + counter-torque(되잡기): 스무딩된 연속 입력으로 항상 적용 ---
+    // 조작력은 쏠림 배율(leanScale = 속도·결승선 근접)과 연동 → drift가 조작을 못 이긴다.
+    // (구버전: 고정 세기라 고속·종반에 "왼쪽 눌러도 왼쪽으로 쏠리는" 느낌의 원인)
+    this.moveLateral(this.smoothLateral, dt);
+    const leanScale =
+      (1 + BalanceConfig.speedLeanScale * moveFactor) *
+      (1 + BalanceConfig.finishLeanScale * this.progress);
+    const controlScale = 1 + BalanceConfig.counterLeanCouple * (leanScale - 1);
+    applyCounter(this.mover, this.smoothLateral, dt, controlScale);
 
     // (이동 중 자동 중앙복원 없음: settleAssist 제거 → 가만두면 leanDrift로 쏠려 낙하)
 

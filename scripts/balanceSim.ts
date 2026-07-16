@@ -5,8 +5,14 @@
  *  1) 실제 게임 코드(상태머신/이동/균형/짐/봇AI)를 헤드리스로 구동해
  *     라운드 이벤트(잡기 c, 낙하수확 d, 생존자 s, 무버별 반입)를 수집한다.
  *     — 이 분포는 점수 노브와 무관(노브는 정산에만 관여).
- *  2) 수집된 라운드에 대해 점수 노브(K, dropScale, catchScale) 그리드를
- *     해석적으로 평가 → 술래 승률 ≈ 50% + 점수 격차 최소 조합 탐색.
+ *  2) 수집된 라운드에 대해 점수 노브(K, dropScale, catchScale, 인원수보정 power,
+ *     잡기 선형/가속) 그리드를 해석적으로 평가 → 술래 승률 ≈ 50% + 격차 최소 조합 탐색.
+ *
+ * Phase 10 채택값: K=10, dropScale=1.0, catchScale=1.8(선형), seekerCountNorm={ref:4, power:1}
+ *
+ * 실행:
+ *   npx esbuild scripts/balanceSim.ts --bundle --platform=node --format=cjs --outfile=/tmp/sim.cjs
+ *   node /tmp/sim.cjs
  */
 
 import { RoundStateMachine } from "../src/gameplay/RoundStateMachine";
@@ -133,7 +139,14 @@ for (const c of COUNTS) {
 }
 
 // --- 2단계: 노브 그리드 평가 ---
-function evalKnobs(K: number, dropS: number, catchS: number, normP = 0, normRef = 4) {
+function evalKnobs(
+  K: number,
+  dropS: number,
+  catchS: number,
+  normP = 0,
+  normRef = 4,
+  catchLinear = false,
+) {
   const perCount: Record<number, { wr: number; gap: number; seeker: number; top: number }> = {};
   for (const c of COUNTS) {
     const rs = records.filter((r) => r.moverCount === c);
@@ -142,7 +155,9 @@ function evalKnobs(K: number, dropS: number, catchS: number, normP = 0, normRef 
     let skSum = 0;
     let topSum = 0;
     for (const r of rs) {
-      const catchBonus = ((r.catches * (r.catches + 1)) / 2) * catchS;
+      const catchBonus = catchLinear
+        ? r.catches * catchS
+        : ((r.catches * (r.catches + 1)) / 2) * catchS;
       const norm = Math.pow(normRef / r.moverCount, normP);
       const sk = (r.drops * dropS + catchBonus) * norm;
       const surv = Math.max(1, r.survivors);
@@ -174,16 +189,26 @@ function evalKnobs(K: number, dropS: number, catchS: number, normP = 0, normRef 
   return { loss, perCount };
 }
 
-type Cfg = { K: number; dropS: number; catchS: number; normP: number; loss: number };
+type Cfg = {
+  K: number;
+  dropS: number;
+  catchS: number;
+  normP: number;
+  lin: boolean;
+  loss: number;
+};
 let best: Cfg | null = null;
 const results: Cfg[] = [];
-for (const normP of [0, 0.5, 0.75, 1]) {
-  for (let K = 8; K <= 32; K += 2) {
-    for (let dropS = 0.4; dropS <= 1.81; dropS += 0.1) {
-      for (let catchS = 0.2; catchS <= 1.21; catchS += 0.1) {
-        const { loss } = evalKnobs(K, dropS, catchS, normP);
-        results.push({ K, dropS, catchS, normP, loss });
-        if (!best || loss < best.loss) best = { K, dropS, catchS, normP, loss };
+for (const lin of [false, true]) {
+  for (const normP of [0.75, 1, 1.15, 1.3, 1.5]) {
+    for (let K = 8; K <= 32; K += 2) {
+      for (let dropS = 0.4; dropS <= 1.81; dropS += 0.1) {
+        for (let catchS = 0.2; catchS <= 2.01; catchS += 0.1) {
+          const { loss } = evalKnobs(K, dropS, catchS, normP, 4, lin);
+          results.push({ K, dropS, catchS, normP, lin, loss });
+          if (!best || loss < best.loss)
+            best = { K, dropS, catchS, normP, lin, loss };
+        }
       }
     }
   }
@@ -199,6 +224,7 @@ realLog("\n=== 현재 값 평가 (GameBalance.score 기준) ===");
     s.catchBonusScale,
     s.seekerCountNorm.power,
     s.seekerCountNorm.ref,
+    s.catchBonusMode === "linear",
   );
   realLog(`loss=${loss.toFixed(4)}`);
   for (const c of COUNTS) {
@@ -212,14 +238,16 @@ realLog("\n=== 현재 값 평가 (GameBalance.score 기준) ===");
 realLog("\n=== 상위 10 조합 ===");
 for (const r of results.slice(0, 12)) {
   realLog(
-    `K=${r.K} drop=${r.dropS.toFixed(1)} catch=${r.catchS.toFixed(1)} normP=${r.normP} loss=${r.loss.toFixed(4)}`,
+    `K=${r.K} drop=${r.dropS.toFixed(1)} catch=${r.catchS.toFixed(1)} normP=${r.normP} ${r.lin ? "선형" : "가속"} loss=${r.loss.toFixed(4)}`,
   );
 }
 
 realLog("\n=== 최적 조합 상세 ===");
 if (best) {
-  const { perCount } = evalKnobs(best.K, best.dropS, best.catchS, best.normP);
-  realLog(`K=${best.K} dropScale=${best.dropS.toFixed(1)} catchScale=${best.catchS.toFixed(1)} normP=${best.normP}`);
+  const { perCount } = evalKnobs(best.K, best.dropS, best.catchS, best.normP, 4, best.lin);
+  realLog(
+    `K=${best.K} dropScale=${best.dropS.toFixed(1)} catchScale=${best.catchS.toFixed(1)} normP=${best.normP} ${best.lin ? "선형" : "가속"}`,
+  );
   for (const c of COUNTS) {
     const p = perCount[c];
     realLog(

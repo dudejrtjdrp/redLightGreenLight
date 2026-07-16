@@ -223,8 +223,9 @@ export class MoverView {
     this.prevZ = this.mover.position.z;
     const dist = Math.hypot(dx, dz);
     const speed = dist / Math.max(dt, 1e-4);
-    if (!caught) this.walkPhase += (dist / w.stride) * TWO_PI;
-    const moving = !caught && speed > w.moveEps;
+    // 탈락자도 줄서기(march) 이동 중엔 걷기 애니가 나오도록 caught 게이트 제거.
+    this.walkPhase += (dist / w.stride) * TWO_PI;
+    const moving = speed > w.moveEps;
     this.gait += ((moving ? 1 : 0) - this.gait) * Math.min(1, w.gaitLerp * dt);
 
     // --- 색 틴트 lerp ---
