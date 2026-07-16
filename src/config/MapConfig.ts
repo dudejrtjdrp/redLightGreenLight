@@ -14,8 +14,8 @@ export const MapConfig = {
   /** 직선 도로 타일(트랙을 따라 반복 배치). */
   roadTile: "/assets/Map/[FREE] Modular Roads - Base/PLUS/gltf/Road1.glb",
 
-  /** 타일 스케일(도로 폭이 논리 레인 폭 ±laneHalfWidth 을 덮도록 조정). */
-  scale: 1.6,
+  /** 타일 스케일(도로 폭이 논리 레인 폭 ±laneHalfWidth 을 덮도록 조정). 1.6→2.5 (레인 반폭 4.5→7.0 연동). */
+  scale: 2.5,
   /**
    * 각 도로 타일 회전(라디안). 도로가 트랙(세로, -z)을 따라 깔리게.
    * 가로로 깔리면 여기에 Math.PI/2 를 넣어 90° 돌리면 됨(정사각 타일 자동판별 대신 명시).

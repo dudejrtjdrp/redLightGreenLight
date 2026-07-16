@@ -29,6 +29,16 @@ export const AssetConfig = {
     yawOffset: 0,
   },
 
+  /** 봇 모델(인덱스 순환 배정). 플레이어(Knight)/술래(Barbarian)와 겹치지 않게. */
+  botModels: [
+    "/assets/gltf/Mage.glb",
+    "/assets/gltf/Ranger.glb",
+    "/assets/gltf/Rogue.glb",
+    "/assets/gltf/Rogue_Hooded.glb",
+    "/assets/gltf/Mage.glb",
+    "/assets/gltf/Ranger.glb",
+  ],
+
   /** 캐릭터가 이동 방향을 바라보게(3인칭 게임식: 이동 헤딩 전체로 부드럽게 회전). */
   face: {
     turnSpeed: 8, // 목표 yaw로 보간 속도(초당). 낮을수록 부드럽고 천천히.

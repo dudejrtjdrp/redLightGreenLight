@@ -13,6 +13,19 @@ export enum SpeedMode {
   CAREFUL = "CAREFUL",
 }
 
+/**
+ * 무버 조작 입력 소스 공통 인터페이스.
+ * 사람(InputController)과 봇(BotController)이 동일 형태로 PlayerSystem에 꽂힌다.
+ */
+export interface MoverInput {
+  /** 전진 입력 유지 여부 */
+  readonly isForward: boolean;
+  /** 좌우 균형 입력: -1(좌) ~ +1(우) */
+  readonly lateral: number;
+  /** 현재 속도 모드 */
+  readonly speedMode: SpeedMode;
+}
+
 /** 무버 생존 상태. */
 export enum MoverStatus {
   ALIVE = "ALIVE",

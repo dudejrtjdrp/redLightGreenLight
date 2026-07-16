@@ -185,7 +185,9 @@ export class CargoSystem {
         if (item.dropperId === mover.id) continue; // 자기 낙하물 불가
         if (mover.position.z < item.position.z) continue; // 이미 앞섬 → 불가
         const dz = mover.position.z - item.position.z; // ≥ 0
-        if (dz > ItemConfig.recoverRadius) continue;
+        const dx = mover.position.x - item.position.x; // 멀티(넓은 길) 대응: x 거리도 판정
+        if (dz * dz + dx * dx > ItemConfig.recoverRadius * ItemConfig.recoverRadius)
+          continue;
 
         // 회수: 낙하 목록에서 제거 → 소유로 전환(harvestCount 유지 = double-dip 추적).
         this.dropped.splice(i, 1);

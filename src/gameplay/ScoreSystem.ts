@@ -43,9 +43,13 @@ export class ScoreSystem {
     return moverScoreOf(delivered, this.survivorCount());
   }
 
-  /** 술래 최종(또는 라이브) 점수. */
+  /** 술래 최종(또는 라이브) 점수. 인원수 보정 포함. */
   seekerScore(): number {
-    return seekerScoreOf(this.seeker.droppedCargoClaimed, this.seeker.catches);
+    return seekerScoreOf(
+      this.seeker.droppedCargoClaimed,
+      this.seeker.catches,
+      this.movers.length,
+    );
   }
 
   /** 라운드 종료 정산(중복 방지). */

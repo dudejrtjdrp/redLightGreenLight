@@ -13,11 +13,20 @@
 import { GameBalance } from "../config/GameBalance";
 import { PlayerConfig } from "../config/PlayerConfig";
 
-/** 술래 점수: 낙하 누적 + 잡기 가속 보너스. */
-export function seekerScoreOf(drops: number, catches: number): number {
+/**
+ * 술래 점수: (낙하 누적 + 잡기 가속 보너스) × 인원수 보정.
+ * @param moverCount 라운드 참가 무버 수(술래 제외). 인원수 보정(seekerCountNorm)에 사용.
+ */
+export function seekerScoreOf(
+  drops: number,
+  catches: number,
+  moverCount: number,
+): number {
   const catchBonus =
     ((catches * (catches + 1)) / 2) * GameBalance.score.catchBonusScale;
-  return drops * GameBalance.score.dropPointScale + catchBonus;
+  const n = GameBalance.score.seekerCountNorm;
+  const norm = Math.pow(n.ref / Math.max(1, moverCount), n.power);
+  return (drops * GameBalance.score.dropPointScale + catchBonus) * norm;
 }
 
 /** 무버 점수: 반입 짐 + 생존 희소성 보너스(K / 생존자수). */
@@ -63,7 +72,7 @@ export function simulateReference(
   };
 
   const survivors = sc.moverCount - sc.seekerCatches; // 잡히지 않은 무버 수
-  const seeker = seekerScoreOf(sc.seekerDrops, sc.seekerCatches);
+  const seeker = seekerScoreOf(sc.seekerDrops, sc.seekerCatches, sc.moverCount);
   const topMover = moverScoreOf(sc.topMoverDelivered, survivors);
 
   console.log("=== [BALANCE CHECK] 8인 기준 정합성 시뮬 ===");

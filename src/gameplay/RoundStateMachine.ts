@@ -46,6 +46,13 @@ export class RoundStateMachine {
   get isActive(): boolean {
     return this._phase !== RoundPhase.LOBBY && this._phase !== RoundPhase.END;
   }
+  /** 남은 시간(초). 상단 타이머 표시용. LOBBY(시작 전)는 설정 최소값. */
+  get remaining(): number {
+    if (this._phase === RoundPhase.LOBBY) {
+      return GameBalance.round.maxDurationMin;
+    }
+    return Math.max(0, this.roundMax - this.roundTime);
+  }
 
   /** 라운드 시작: LOBBY → GREEN. 라운드 최대시간 확정. */
   start(): void {

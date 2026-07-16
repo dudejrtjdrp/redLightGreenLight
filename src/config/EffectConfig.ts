@@ -57,10 +57,10 @@ export const EffectConfig = {
   /** 트랙 위 낙하물 표시 풀 크기(초과분은 표시 생략). */
   droppedPoolSize: 40,
 
-  /** 카메라 무버 추적. */
+  /** 카메라 무버 추적. 넓어진 레인(±7)이 다 보이도록 소폭 상향/후퇴. */
   camera: {
-    back: 9,
-    height: 6.5,
+    back: 10.5,
+    height: 7.8,
     lookAhead: 5,
   },
 } as const;

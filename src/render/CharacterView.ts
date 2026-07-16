@@ -68,13 +68,17 @@ export class CharacterView {
   private readonly targetEmissive: THREE.Color;
   private readonly shadows: boolean;
 
-  /** 로드 + 구성. 실패하면 null(폴백). */
-  static async create(mover: Mover, shadows: boolean): Promise<CharacterView | null> {
+  /** 로드 + 구성. 실패하면 null(폴백). modelPath 미지정 시 기본 플레이어 모델. */
+  static async create(
+    mover: Mover,
+    shadows: boolean,
+    modelPath?: string,
+  ): Promise<CharacterView | null> {
     if (!AssetConfig.enabled) return null;
     const loader = new GLTFLoader();
 
     let charGltf;
-    const charUrl = AssetConfig.player.path;
+    const charUrl = modelPath ?? AssetConfig.player.path;
     try {
       console.log("[KayKit] 캐릭터 로드 시도:", charUrl);
       charGltf = await loader.loadAsync(charUrl);

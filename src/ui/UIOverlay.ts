@@ -19,6 +19,8 @@ export interface UIRefs {
   seeker: Seeker;
   scoreSystem: ScoreSystem;
   movers: readonly Mover[];
+  /** 사람 플레이어 무버 id(리더보드 "나" 표시용). 미지정 시 player.id. */
+  playerId?: number;
 }
 
 /** 페이즈별 색/구호. */
@@ -36,9 +38,20 @@ export class UIOverlay {
   private readonly banner: HTMLDivElement;
   private readonly stats: HTMLPreElement;
   private readonly board: HTMLPreElement;
+  /** 상단 중앙 카운트다운 타이머(1:30 → 0:00). */
+  private readonly topTimer: HTMLDivElement;
   private readonly timerId: number;
 
   constructor(private readonly refs: UIRefs) {
+    // 상단 중앙 타이머(별도 루트 — 게임 몰입 방해 최소화).
+    this.topTimer = document.createElement("div");
+    this.topTimer.style.cssText =
+      "position:fixed;top:10px;left:50%;transform:translateX(-50%);z-index:10;" +
+      "font:800 30px/1 ui-monospace,Menlo,Consolas,monospace;color:#eaf6ee;" +
+      "background:rgba(10,14,20,.72);border:1px solid #2c3a52;border-radius:12px;" +
+      "padding:10px 22px;pointer-events:none;user-select:none;" +
+      "text-shadow:0 1px 3px rgba(0,0,0,.6);";
+    document.body.appendChild(this.topTimer);
     this.root = document.createElement("div");
     this.root.style.cssText =
       "position:fixed;top:12px;right:12px;width:230px;" +
@@ -74,6 +87,14 @@ export class UIOverlay {
 
   private update(): void {
     const { round, player, seeker, scoreSystem, movers } = this.refs;
+    const playerId = this.refs.playerId ?? player.id;
+
+    // 상단 타이머: 남은 시간 m:ss. 10초 미만이면 빨강 강조.
+    const remain = round.remaining;
+    const mm = Math.floor(remain / 60);
+    const ss = Math.floor(remain % 60);
+    this.topTimer.textContent = `⏱ ${mm}:${String(ss).padStart(2, "0")}`;
+    this.topTimer.style.color = remain <= 10 ? "#ff6b57" : "#eaf6ee";
 
     // 배너: 페이즈 색 + 구호.
     const style = PHASE_STYLE[round.phase];
@@ -83,7 +104,6 @@ export class UIOverlay {
     // 스탯.
     const tiltBar = this.tiltBar(player.tilt);
     this.stats.textContent =
-      `타이머: ${round.elapsedRound.toFixed(1)}s\n` +
       `내 짐: ${player.cargo}   진행: ${this.progressPct()}%\n` +
       `균형: ${tiltBar}${player.inDanger ? "  ⚠ 아슬아슬!" : ""}\n` +
       `경고: ${player.warnings} / ${BalanceConfig.warningMax}\n` +
@@ -91,12 +111,12 @@ export class UIOverlay {
 
     // 리더보드: 무버 + 술래 통합 정렬.
     const rows = movers.map((m) => ({
-      name: `무버#${m.id}`,
+      name: m.id === playerId ? "나" : `봇${m.id - 1}`,
       score: scoreSystem.moverScore(m),
       tag: this.statusKo(m),
     }));
     rows.push({
-      name: `술래#${seeker.id}`,
+      name: "술래",
       score: scoreSystem.seekerScore(),
       tag: `잡기${seeker.catches}·낙하${seeker.droppedCargoClaimed}`,
     });
@@ -143,5 +163,6 @@ export class UIOverlay {
   dispose(): void {
     window.clearInterval(this.timerId);
     this.root.remove();
+    this.topTimer.remove();
   }
 }

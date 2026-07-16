@@ -62,7 +62,7 @@ export class SceneManager {
   /** 정적 씬: 바닥 + 조명(소프트 그림자 1개) + 시작/도착선. */
   private buildStaticScene(): void {
     // 바닥 plane (밝은 파스텔, 그림자 수신).
-    const groundGeo = new THREE.PlaneGeometry(30, 70);
+    const groundGeo = new THREE.PlaneGeometry(46, 70);
     const groundMat = new THREE.MeshStandardMaterial({
       color: 0xcfe8d0,
       roughness: 0.95,

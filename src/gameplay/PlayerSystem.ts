@@ -16,10 +16,9 @@
 import { GameBalance } from "../config/GameBalance";
 import { BalanceConfig } from "../config/BalanceConfig";
 import { PlayerConfig } from "../config/PlayerConfig";
-import { Mover, MoverStatus } from "./Mover";
+import { Mover, MoverInput, MoverStatus } from "./Mover";
 import { RoundStateMachine } from "./RoundStateMachine";
 import { RoundPhase } from "./RoundState";
-import { InputController } from "../input/InputController";
 import { stepMovement } from "./MovementSystem";
 import { CargoSystem } from "./CargoSystem";
 import {
@@ -47,7 +46,8 @@ export class PlayerSystem {
 
   constructor(
     private readonly mover: Mover,
-    private readonly input: InputController,
+    /** 사람(InputController) 또는 봇(BotController) — 동일 규칙으로 처리. */
+    private readonly input: MoverInput,
     private readonly round: RoundStateMachine,
     private readonly cargo: CargoSystem,
   ) {}
