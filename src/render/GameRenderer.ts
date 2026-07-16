@@ -13,6 +13,7 @@ import { CharacterView } from "./CharacterView";
 import { SeekerView } from "./SeekerView";
 import { DroppedItemsView } from "./DroppedItemsView";
 import { EffectSystem } from "./EffectSystem";
+import { MapView } from "./MapView";
 import { gameBus } from "../core/EventBus";
 import { EffectConfig } from "../config/EffectConfig";
 import { ArtConfig } from "../config/ArtConfig";
@@ -43,6 +44,7 @@ export class GameRenderer {
   private shakeEnergy = 0;
   private shakeTime = 0;
   private readonly scratch = new THREE.Vector3();
+  private map: MapView | null = null;
 
   constructor(
     private readonly sceneManager: SceneManager,
@@ -85,6 +87,10 @@ export class GameRenderer {
 
     // KayKit glb 비동기 로드 → 성공 시 절차적 아바타를 교체.
     void this.tryLoadCharacter(moverView);
+    // 맵(도로) 비동기 로드 → 실패 시 바닥 플레이스홀더 유지.
+    void MapView.create(sceneManager.scene).then((m) => {
+      this.map = m;
+    });
   }
 
   private async tryLoadCharacter(fallback: MoverView): Promise<void> {
